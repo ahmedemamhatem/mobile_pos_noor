@@ -81,27 +81,56 @@ def fix_incoming_rate_on_submit(doc, method=None):
                 "incoming_rate", sle_val, update_modified=False)
 
 
-def set_customer_balance_on_submit(doc, method=None):
+def set_customer_balance_before_save(doc, method=None):
     """
-    Hook function called on Sales Invoice submit.
-    Sets custom_paid_amount and custom_customer_balance_after fields.
+    Hook on Sales Invoice before_save.
+    Calculates projected customer balance after this invoice (for draft state).
+    Formula: current GL balance + outstanding_amount (grand_total - paid)
+    This gives an estimate before GL entries exist.
     """
     try:
         if not doc.customer or not doc.company:
             return
 
-        # Get paid amount from the invoice
+        current_balance = get_customer_balance(doc.customer, doc.company)
+        grand_total = flt(doc.grand_total, 2)
+        paid = flt(doc.paid_amount, 2) if hasattr(doc, 'paid_amount') else 0
+        # For draft: projected balance = current balance + what this invoice will add
+        # Invoice adds: grand_total (debit) - paid_amount (credit from payment)
+        projected_addition = flt(grand_total - paid, 2)
+        if doc.get("is_return"):
+            # Returns reduce balance (credit note)
+            projected_balance = flt(current_balance - grand_total, 2)
+        else:
+            projected_balance = flt(current_balance + projected_addition, 2)
+
+        doc.custom_customer_balance_after = projected_balance
+        doc.custom_paid_amount = paid
+
+    except Exception as e:
+        frappe.log_error(
+            message=f"Error calculating projected balance for {doc.name}: {str(e)}",
+            title="Mobile POS - Customer Balance Draft Error"
+        )
+
+
+def set_customer_balance_on_submit(doc, method=None):
+    """
+    Hook on Sales Invoice on_submit.
+    Sets actual customer balance from GL Entry (GL entries exist at this point).
+    Also stores the paid_amount for reference.
+    """
+    try:
+        if not doc.customer or not doc.company:
+            return
+
         paid_amount = flt(doc.paid_amount, 2) if hasattr(doc, 'paid_amount') else 0
 
-        # Get customer balance after this invoice (from GL Entry)
-        # GL entries are already created at this point since this runs on_submit
+        # GL entries are already created on_submit, get actual balance
         customer_balance = get_customer_balance(doc.customer, doc.company)
 
-        # Update the custom fields using db_set to avoid validation
         doc.db_set('custom_paid_amount', paid_amount, update_modified=False)
         doc.db_set('custom_customer_balance_after', customer_balance, update_modified=False)
-
-        frappe.db.commit()
 
     except Exception as e:
         frappe.log_error(
@@ -114,3 +143,9 @@ def set_represents_company(doc, method=None):
     """Set represents_company = company on transaction doctypes before save."""
     if doc.get("company") and not doc.get("represents_company"):
         doc.represents_company = doc.company
+
+
+def set_item_price_company(doc, method=None):
+    """Auto-set custom_company on Item Price if not provided."""
+    if not doc.get("custom_company"):
+        doc.custom_company = frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value("Company", {}, "name")

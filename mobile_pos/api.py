@@ -610,33 +610,30 @@ def get_admin_stock_balances(sort_by=None, sort_order="desc", limit=None, group_
 
 
 def _get_account_balance(account, from_date=None, to_date=None, company=None):
-    if not from_date:
-        from_date = get_first_day(getdate(today()))
     if not to_date:
         to_date = getdate(today())
 
     company_filter = ""
-    params_opening = [account, from_date]
-    params_period = [account, from_date, to_date]
+    params = [account]
+
+    date_filter = " AND posting_date <= %s"
+    params.append(to_date)
+
+    if from_date:
+        date_filter = " AND posting_date BETWEEN %s AND %s"
+        params = [account, from_date, to_date]
 
     if company:
         company_filter = " AND company = %s"
-        params_opening.append(company)
-        params_period.append(company)
+        params.append(company)
 
-    opening = frappe.db.sql(f"""
+    balance = frappe.db.sql(f"""
         SELECT SUM(debit - credit) AS balance
         FROM `tabGL Entry`
-        WHERE account = %s AND posting_date < %s{company_filter}
-    """, params_opening, as_dict=True)[0].balance or 0
+        WHERE account = %s{date_filter} AND is_cancelled = 0{company_filter}
+    """, params, as_dict=True)[0].balance or 0
 
-    period = frappe.db.sql(f"""
-        SELECT SUM(debit - credit) AS balance
-        FROM `tabGL Entry`
-        WHERE account = %s AND posting_date BETWEEN %s AND %s{company_filter}
-    """, params_period, as_dict=True)[0].balance or 0
-
-    return flt(opening) + flt(period)
+    return flt(balance)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -649,7 +646,6 @@ def get_admin_payment_balances(
     company: Optional[str] = None,
     include_unmapped: int = 1,
 ):
-    from_date = from_date or today()
     to_date = to_date or today()
     sort_order = (sort_order or "desc").lower().strip()
     sort_by = (sort_by or "amount").strip()
@@ -754,6 +750,7 @@ def get_admin_customer_balances(from_date=None, to_date=None, sort_by=None, sort
             FROM `tabGL Entry` gle
             LEFT JOIN `tabCustomer` c ON c.name = gle.party
             WHERE gle.docstatus = 1
+              AND gle.is_cancelled = 0
               AND gle.party_type = 'Customer'
               AND IFNULL(gle.party,'') != ''
               AND c.custom_mini_pos_profile = %(profile)s
@@ -819,6 +816,7 @@ def get_admin_supplier_balances(from_date=None, to_date=None, sort_by=None, sort
         FROM `tabGL Entry` gle
         LEFT JOIN `tabSupplier` s ON s.name = gle.party
         WHERE gle.docstatus = 1
+          AND gle.is_cancelled = 0
           AND gle.party_type = 'Supplier'
           AND IFNULL(gle.party,'') != ''
           {date_clause}
@@ -977,6 +975,7 @@ def get_admin_sales_summary(from_date=None, to_date=None, company=None):
         SELECT COALESCE(SUM(debit - credit), 0) as total
         FROM `tabGL Entry`
         WHERE docstatus = 1
+          AND is_cancelled = 0
           AND party_type = 'Customer'
           AND IFNULL(party, '') != ''
           {company_filter}
@@ -1042,6 +1041,7 @@ def get_admin_purchase_summary(from_date=None, to_date=None, company=None):
         SELECT COALESCE(SUM(credit - debit), 0) as total
         FROM `tabGL Entry`
         WHERE docstatus = 1
+          AND is_cancelled = 0
           AND party_type = 'Supplier'
           AND IFNULL(party, '') != ''
           {company_filter}
@@ -1582,7 +1582,7 @@ def get_admin_top_suppliers(limit=10, company=None):
             COALESCE((
                 SELECT SUM(credit - debit)
                 FROM `tabGL Entry`
-                WHERE party_type = 'Supplier' AND party = s.name AND docstatus = 1
+                WHERE party_type = 'Supplier' AND party = s.name AND docstatus = 1 AND is_cancelled = 0
                 {gl_company_filter}
             ), 0) as balance
         FROM `tabSupplier` s
@@ -1948,7 +1948,7 @@ def get_admin_aging_report(company=None):
             COALESCE((
                 SELECT SUM(debit - credit)
                 FROM `tabGL Entry`
-                WHERE party_type = 'Customer' AND party = c.name AND docstatus = 1
+                WHERE party_type = 'Customer' AND party = c.name AND docstatus = 1 AND is_cancelled = 0
                 {gl_company_filter}
             ), 0) as total_balance,
             (
@@ -2041,7 +2041,7 @@ def get_admin_expected_collections(company=None):
             COALESCE((
                 SELECT SUM(debit - credit)
                 FROM `tabGL Entry`
-                WHERE party_type = 'Customer' AND party = c.name AND docstatus = 1
+                WHERE party_type = 'Customer' AND party = c.name AND docstatus = 1 AND is_cancelled = 0
                 {gl_company_filter}
             ), 0) as balance,
             (
@@ -2104,7 +2104,7 @@ def get_admin_due_payables(company=None):
             COALESCE((
                 SELECT SUM(credit - debit)
                 FROM `tabGL Entry`
-                WHERE party_type = 'Supplier' AND party = s.name AND docstatus = 1
+                WHERE party_type = 'Supplier' AND party = s.name AND docstatus = 1 AND is_cancelled = 0
                 {gl_company_filter}
             ), 0) as balance,
             (

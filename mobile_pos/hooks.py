@@ -195,7 +195,10 @@ after_migrate = [
 
 doc_events = {
 	"Sales Invoice": {
-		"before_save": "mobile_pos.mobile_pos.utils.invoice_utils.set_represents_company",
+		"before_save": [
+			"mobile_pos.mobile_pos.utils.invoice_utils.set_represents_company",
+			"mobile_pos.mobile_pos.utils.invoice_utils.set_customer_balance_before_save"
+		],
 		"on_submit": [
 			"mobile_pos.mobile_pos.utils.invoice_utils.fix_incoming_rate_on_submit",
 			"mobile_pos.mobile_pos.doctype.share_ledger.share_ledger.create_share_ledger_from_sales_invoice",
@@ -228,6 +231,9 @@ doc_events = {
 	"Journal Entry": {
 		"on_submit": "mobile_pos.mobile_pos.doctype.share_ledger.share_ledger.create_share_ledger_from_journal_entry",
 		"on_cancel": "mobile_pos.mobile_pos.doctype.share_ledger.share_ledger.cancel_share_ledger_from_journal_entry"
+	},
+	"Item Price": {
+		"before_validate": "mobile_pos.mobile_pos.utils.invoice_utils.set_item_price_company"
 	}
 }
 

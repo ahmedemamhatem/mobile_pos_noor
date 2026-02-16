@@ -601,6 +601,67 @@ def check_duplicate_invoice(customer, items, company=None):
     return None
 
 
+def _generate_custom_hash():
+    """Generate a custom hash (5 digits + date + time) for invoice/payment identification."""
+    import random
+    from datetime import datetime
+    now = datetime.now()
+    random_5digit = str(random.randint(10000, 99999))
+    date_str = now.strftime("%Y%m%d")
+    time_str = now.strftime("%H%M%S")
+    return f"{random_5digit}-{date_str}-{time_str}"
+
+
+def _create_payment_entry(profile, customer, company, mode_of_payment, total_payment, custom_hash):
+    """Create and submit a Payment Entry for the given amount.
+
+    Returns the Payment Entry name, or None if no payment was created.
+    """
+    if total_payment <= 0 or not mode_of_payment or mode_of_payment in ("Credit", "No Payment"):
+        return None
+
+    try:
+        mop = frappe.get_doc("Mode of Payment", mode_of_payment)
+    except frappe.DoesNotExistError:
+        frappe.throw(_("Mode of Payment {0} not found").format(mode_of_payment))
+
+    paid_to_account = None
+    for row in mop.accounts:
+        if row.company == company:
+            paid_to_account = row.default_account
+            break
+    if not paid_to_account:
+        frappe.throw(f"No account found in Mode of Payment '{mode_of_payment}' for company '{company}'")
+
+    paid_from_account = frappe.get_value("Company", company, "default_receivable_account")
+    if not paid_from_account:
+        frappe.throw(f"No Default Receivable Account set for company '{company}'")
+
+    pe_dict = {
+        "doctype": "Payment Entry",
+        "payment_type": "Receive",
+        "party_type": "Customer",
+        "party": customer,
+        "company": company,
+        "paid_from": paid_from_account,
+        "paid_to": paid_to_account,
+        "paid_amount": total_payment,
+        "received_amount": total_payment,
+        "reference_no": custom_hash,
+        "reference_date": frappe.utils.nowdate(),
+        "mode_of_payment": mode_of_payment,
+        "custom_hash": custom_hash,
+        "custom_mini_pos_profile": profile.name,
+        "references": []
+    }
+    if frappe.get_meta("Payment Entry").has_field("mini_pos_profile"):
+        pe_dict["mini_pos_profile"] = profile.name
+    pe = frappe.get_doc(pe_dict)
+    pe.insert(ignore_permissions=True)
+    pe.submit()
+    return pe.name
+
+
 @frappe.whitelist(allow_guest=False)
 def mini_pos_create_invoice(data):
     profile = get_profile_or_throw()
@@ -667,70 +728,24 @@ def mini_pos_create_invoice(data):
                 "description": tax.get("description", ""),
             })
 
-    # Generate custom hash (5 digits + date + time)
-    import random
-    from datetime import datetime
-    now = datetime.now()
-    random_5digit = str(random.randint(10000, 99999))
-    date_str = now.strftime("%Y%m%d")
-    time_str = now.strftime("%H%M%S")
-    custom_hash = f"{random_5digit}-{date_str}-{time_str}"
-
+    custom_hash = _generate_custom_hash()
     company = profile.company
+    save_as_draft = int(data.get("save_as_draft", 0))
 
-    # --- STEP 1: Create Payment Entry FIRST (total payment = paid_amount + overpayment_amount) ---
+    # --- STEP 1: Create Payment Entry (skip for drafts) ---
     total_payment = paid_amount + overpayment_amount
     payment_entry_name = None
 
-    if total_payment > 0 and mode_of_payment and mode_of_payment not in ("Credit", "No Payment"):
-        # Get Mode of Payment account
-        try:
-            mop = frappe.get_doc("Mode of Payment", mode_of_payment)
-        except frappe.DoesNotExistError:
-            frappe.throw(_("Mode of Payment {0} not found").format(mode_of_payment))
+    if not save_as_draft:
+        payment_entry_name = _create_payment_entry(
+            profile, customer, company, mode_of_payment, total_payment, custom_hash
+        )
 
-        paid_to_account = None
-        for row in mop.accounts:
-            if row.company == company:
-                paid_to_account = row.default_account
-                break
-        if not paid_to_account:
-            frappe.throw(f"No account found in Mode of Payment '{mode_of_payment}' for company '{company}'")
-
-        paid_from_account = frappe.get_value("Company", company, "default_receivable_account")
-        if not paid_from_account:
-            frappe.throw(f"No Default Receivable Account set for company '{company}'")
-
-        # Create unallocated payment entry first (no references)
-        pe_dict = {
-            "doctype": "Payment Entry",
-            "payment_type": "Receive",
-            "party_type": "Customer",
-            "party": customer,
-            "company": company,
-            "paid_from": paid_from_account,
-            "paid_to": paid_to_account,
-            "paid_amount": total_payment,
-            "received_amount": total_payment,
-            "reference_no": custom_hash,
-            "reference_date": frappe.utils.nowdate(),
-            "mode_of_payment": mode_of_payment,
-            "custom_hash": custom_hash,
-            "custom_mini_pos_profile": profile.name,
-            "references": []  # No references yet - will allocate after invoice
-        }
-        # Set mini_pos_profile if field exists
-        if frappe.get_meta("Payment Entry").has_field("mini_pos_profile"):
-            pe_dict["mini_pos_profile"] = profile.name
-        pe = frappe.get_doc(pe_dict)
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        payment_entry_name = pe.name
-
-    # --- STEP 2: Create and submit Invoice ---
+    # --- STEP 2: Create Invoice ---
     doc_dict = {
         "doctype": "Sales Invoice",
         "customer": customer,
+        "company": company,
         "is_pos": 0,
         "update_stock": 1,
         "disable_rounded_total": 1,
@@ -758,116 +773,266 @@ def mini_pos_create_invoice(data):
         doc_dict["return_against"] = return_against
 
     doc = frappe.get_doc(doc_dict)
-    doc.insert()
+    doc.insert(ignore_permissions=True)
     doc.save()
+
+    if save_as_draft and profile.allow_draft_invoices:
+        # Save as draft — store intended payment info for later submission
+        if frappe.get_meta("Sales Invoice").has_field("custom_paid_amount"):
+            doc.db_set("custom_paid_amount", paid_amount, update_modified=False)
+        frappe.db.commit()
+        return {
+            "name": doc.name,
+            "is_draft": True,
+            "custom_hash": custom_hash,
+            "grand_total": doc.grand_total
+        }
+
+    # Submit the invoice
     doc.submit()
-
-    # # --- STEP 3: Allocate unallocated payment to the invoice ---
-    # allocated_from_existing = 0
-    # if payment_entry_name and paid_amount > 0:
-    #     # Get the invoice outstanding amount (should be grand_total since no payment allocated yet)
-    #     invoice_outstanding = flt(doc.grand_total)
-    #     amount_to_allocate = min(paid_amount, invoice_outstanding)
-
-    #     if amount_to_allocate > 0:
-    #         # Create Payment Entry reference to allocate against this invoice
-    #         # We need to cancel and amend the payment entry to add reference
-    #         # OR use Payment Reconciliation
-    #         # Using direct SQL update and reconciliation approach
-
-    #         # Add reference to the payment entry
-    #         pe_doc = frappe.get_doc("Payment Entry", payment_entry_name)
-    #         pe_doc.flags.ignore_validate_update_after_submit = True
-    #         pe_doc.append("references", {
-    #             "reference_doctype": "Sales Invoice",
-    #             "reference_name": doc.name,
-    #             "total_amount": doc.grand_total,
-    #             "outstanding_amount": invoice_outstanding,
-    #             "allocated_amount": amount_to_allocate
-    #         })
-    #         pe_doc.save(ignore_permissions=True)
-
-    #         # Update GL entries for reconciliation
-    #         frappe.db.sql("""
-    #             UPDATE `tabGL Entry`
-    #             SET against_voucher_type = 'Sales Invoice',
-    #                 against_voucher = %s
-    #             WHERE voucher_type = 'Payment Entry'
-    #               AND voucher_no = %s
-    #               AND party_type = 'Customer'
-    #               AND party = %s
-    #               AND against_voucher IS NULL
-    #             LIMIT 1
-    #         """, (doc.name, payment_entry_name, customer))
-
-    #         allocated_from_existing = amount_to_allocate
-
-    # # --- STEP 4: Check for other unallocated payments and allocate them ---
-    # # Get any existing unallocated payments for this customer
-    # remaining_outstanding = flt(doc.grand_total) - allocated_from_existing
-
-    # if remaining_outstanding > 0 and not is_return:
-    #     # Find unallocated payment entries for this customer
-    #     unallocated_payments = frappe.db.sql("""
-    #         SELECT pe.name, pe.unallocated_amount
-    #         FROM `tabPayment Entry` pe
-    #         WHERE pe.party_type = 'Customer'
-    #           AND pe.party = %s
-    #           AND pe.company = %s
-    #           AND pe.docstatus = 1
-    #           AND pe.payment_type = 'Receive'
-    #           AND pe.unallocated_amount > 0
-    #           AND pe.name != %s
-    #         ORDER BY pe.posting_date ASC, pe.creation ASC
-    #     """, (customer, company, payment_entry_name or ''), as_dict=True)
-
-    #     for payment in unallocated_payments:
-    #         if remaining_outstanding <= 0:
-    #             break
-
-    #         available_amount = flt(payment.unallocated_amount)
-    #         amount_to_allocate = min(available_amount, remaining_outstanding)
-
-    #         if amount_to_allocate > 0:
-    #             # Add reference to this payment entry
-    #             try:
-    #                 pe_doc = frappe.get_doc("Payment Entry", payment.name)
-    #                 pe_doc.flags.ignore_validate_update_after_submit = True
-    #                 pe_doc.append("references", {
-    #                     "reference_doctype": "Sales Invoice",
-    #                     "reference_name": doc.name,
-    #                     "total_amount": doc.grand_total,
-    #                     "outstanding_amount": remaining_outstanding,
-    #                     "allocated_amount": amount_to_allocate
-    #                 })
-    #                 pe_doc.save(ignore_permissions=True)
-
-    #                 # Update GL entries for reconciliation
-    #                 frappe.db.sql("""
-    #                     UPDATE `tabGL Entry`
-    #                     SET against_voucher_type = 'Sales Invoice',
-    #                         against_voucher = %s
-    #                     WHERE voucher_type = 'Payment Entry'
-    #                       AND voucher_no = %s
-    #                       AND party_type = 'Customer'
-    #                       AND party = %s
-    #                       AND against_voucher IS NULL
-    #                     LIMIT 1
-    #                 """, (doc.name, payment.name, customer))
-
-    #                 remaining_outstanding -= amount_to_allocate
-    #             except Exception as e:
-    #                 frappe.log_error(f"Error allocating payment {payment.name}: {str(e)}")
 
     frappe.db.commit()
     return {
         "name": doc.name,
         "payment_entry": payment_entry_name,
-        "overpayment_entry": None,  # Overpayment is now part of main payment as unallocated
+        "overpayment_entry": None,
         "custom_hash": custom_hash,
         "overpayment_amount": overpayment_amount,
         "total_payment": total_payment
     }
+
+
+@frappe.whitelist()
+def mini_pos_get_draft_invoices(customer=None):
+    """Get all draft invoices for the current user's POS profile."""
+    profile = get_profile_or_throw()
+    company = profile.company
+
+    filters = {
+        "company": company,
+        "docstatus": 0,
+        "is_return": 0
+    }
+
+    # Filter by profile using whichever field exists
+    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+        filters["mini_pos_profile"] = profile.name
+    else:
+        filters["custom_mini_pos_profile"] = profile.name
+
+    if customer:
+        filters["customer"] = customer
+
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters=filters,
+        fields=[
+            "name", "customer", "customer_name", "posting_date",
+            "grand_total", "custom_hash", "custom_paid_amount", "creation"
+        ],
+        order_by="creation desc",
+        limit=50
+    )
+
+    # Add item count for each invoice
+    for inv in invoices:
+        inv["item_count"] = frappe.db.count(
+            "Sales Invoice Item", {"parent": inv.name}
+        )
+
+    return invoices
+
+
+@frappe.whitelist()
+def mini_pos_get_draft_invoice(invoice_name):
+    """Get a single draft invoice with its items for loading into POS page."""
+    profile = get_profile_or_throw()
+
+    if not invoice_name:
+        frappe.throw(_("Invoice name is required."))
+
+    doc = frappe.get_doc("Sales Invoice", invoice_name)
+
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft invoices can be loaded."))
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this invoice."))
+
+    items = []
+    for item in doc.items:
+        items.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "qty": item.qty,
+            "rate": item.rate,
+            "uom": item.uom,
+            "conversion_factor": item.conversion_factor
+        })
+
+    return {
+        "name": doc.name,
+        "customer": doc.customer,
+        "customer_name": doc.customer_name,
+        "items": items,
+        "discount_amount": doc.discount_amount or 0,
+        "grand_total": doc.grand_total,
+        "custom_paid_amount": doc.get("custom_paid_amount") or 0
+    }
+
+
+@frappe.whitelist()
+def mini_pos_update_draft_invoice(invoice_name, data):
+    """Update items, customer, discount, and taxes on a draft invoice."""
+    profile = get_profile_or_throw()
+    data = frappe._dict(json.loads(data) if isinstance(data, str) else data)
+
+    if not invoice_name:
+        frappe.throw(_("Invoice name is required."))
+
+    doc = frappe.get_doc("Sales Invoice", invoice_name)
+
+    # Validate: must be draft and belong to this profile
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft invoices can be edited."))
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this invoice."))
+
+    # Update customer if provided
+    if data.get("customer"):
+        doc.customer = data.get("customer")
+
+    # Update items if provided
+    items = data.get("items")
+    if items:
+        doc.items = []
+        for item in items:
+            item_code = item.get("item_code")
+            if not item_code:
+                frappe.throw(_("Item code is required for each row."))
+            stock_uom = frappe.db.get_value("Item", item_code, "stock_uom")
+            uom = item.get("uom") or stock_uom
+            conversion_factor = float(item.get("conversion_factor") or 0)
+            if uom != stock_uom and not conversion_factor:
+                conversion_factor = frappe.db.get_value(
+                    "UOM Conversion Detail",
+                    {"parent": item_code, "parenttype": "Item", "uom": uom},
+                    "conversion_factor"
+                ) or 1
+            conversion_factor = conversion_factor or 1
+            doc.append("items", {
+                "item_code": item_code,
+                "qty": float(item.get("qty", 1)),
+                "rate": float(item.get("rate", 0)),
+                "warehouse": profile.warehouse,
+                "uom": uom,
+                "conversion_factor": conversion_factor
+            })
+
+    # Update discount if provided
+    discount_amount = float(data.get("discount_amount") or 0)
+    if discount_amount:
+        doc.discount_amount = discount_amount
+        doc.apply_discount_on = data.get("apply_discount_on") or "Grand Total"
+        doc.is_cash_or_non_trade_discount = 1
+        from mobile_pos.mobile_pos.doctype.mobile_pos_settings.mobile_pos_settings import get_mobile_pos_settings
+        settings = get_mobile_pos_settings(profile.company)
+        if settings.invoice_discount_account:
+            doc.additional_discount_account = settings.invoice_discount_account
+    elif "discount_amount" in data:
+        doc.discount_amount = 0
+
+    # Update taxes if provided
+    taxes_table = data.get("taxes")
+    if taxes_table is not None:
+        doc.taxes = []
+        for tax in taxes_table:
+            if tax.get("account_head") and tax.get("rate") is not None:
+                doc.append("taxes", {
+                    "charge_type": tax.get("charge_type"),
+                    "account_head": tax.get("account_head"),
+                    "rate": tax.get("rate"),
+                    "description": tax.get("description", ""),
+                })
+
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "grand_total": doc.grand_total,
+        "customer": doc.customer,
+        "customer_name": doc.customer_name
+    }
+
+
+@frappe.whitelist()
+def mini_pos_submit_draft_invoice(invoice_name, data=None):
+    """Submit a draft invoice with payment information."""
+    profile = get_profile_or_throw()
+    data = frappe._dict(json.loads(data) if isinstance(data, str) else data) if data else frappe._dict()
+
+    if not invoice_name:
+        frappe.throw(_("Invoice name is required."))
+
+    doc = frappe.get_doc("Sales Invoice", invoice_name)
+
+    # Validate: must be draft and belong to this profile
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft invoices can be submitted."))
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this invoice."))
+
+    company = profile.company
+    customer = doc.customer
+    mode_of_payment = data.get("mode_of_payment")
+    paid_amount = float(data.get("paid_amount") or 0)
+    overpayment_amount = float(data.get("overpayment_amount") or 0)
+    total_payment = paid_amount + overpayment_amount
+
+    # Use existing custom_hash or generate a new one
+    custom_hash = doc.get("custom_hash") or _generate_custom_hash()
+    if not doc.get("custom_hash"):
+        doc.db_set("custom_hash", custom_hash, update_modified=False)
+
+    # Create Payment Entry
+    payment_entry_name = _create_payment_entry(
+        profile, customer, company, mode_of_payment, total_payment, custom_hash
+    )
+
+    # Submit the invoice
+    doc.submit()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "payment_entry": payment_entry_name,
+        "custom_hash": custom_hash,
+        "overpayment_amount": overpayment_amount,
+        "total_payment": total_payment
+    }
+
+
+@frappe.whitelist()
+def mini_pos_delete_draft_invoice(invoice_name):
+    """Delete a draft invoice."""
+    profile = get_profile_or_throw()
+
+    if not invoice_name:
+        frappe.throw(_("Invoice name is required."))
+
+    doc = frappe.get_doc("Sales Invoice", invoice_name)
+
+    # Validate: must be draft and belong to this profile
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft invoices can be deleted."))
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this invoice."))
+
+    frappe.delete_doc("Sales Invoice", invoice_name, ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"success": True, "message": _("Draft invoice {0} deleted.").format(invoice_name)}
+
 
 @frappe.whitelist()
 def mini_pos_make_payment(customer, amount, mode_of_payment, invoice=None, payment_type="Receive", remarks=None):
@@ -998,6 +1163,7 @@ def mini_pos_get_returns(return_against, items):
         "is_return": 1,
         "return_against": return_against,
         "customer": doc.customer,
+        "company": doc.company,
         "items": return_items,
         "payments": [],
         "update_stock": 1,
@@ -1091,6 +1257,7 @@ def mini_pos_create_direct_return(customer, items):
         "doctype": "Sales Invoice",
         "is_return": 1,
         "customer": customer,
+        "company": profile.company,
         "items": return_items,
         "payments": [],
         "update_stock": 1,
@@ -1181,7 +1348,8 @@ def mini_pos_create_customer(customer_name, customer_type="Individual", territor
         "customer_type": customer_type,
         "territory": territory,
         "customer_group": customer_group,
-        "custom_mini_pos_profile": profile.name
+        "custom_mini_pos_profile": profile.name,
+        "custom_company": profile.company
     })
 
     customer.insert(ignore_permissions=True)
@@ -1412,7 +1580,9 @@ def mini_pos_invoice_details(invoice_name):
             si.status,
             si.is_return,
             si.return_against,
-            si.custom_hash
+            si.custom_hash,
+            si.custom_customer_balance_after,
+            si.custom_paid_amount
         FROM `tabSales Invoice` si
         WHERE si.name = %s
           AND si.company = %s
