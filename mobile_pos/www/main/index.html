@@ -2195,6 +2195,154 @@ logoutBtn.classList.remove("hidden");
 
 loginOpenBtn.classList.add("hidden");
 
+// Show Ramadan welcome animation once per session
+showRamadanWelcome(ctx.user_full_name || ctx.user_id || "");
+
+}
+
+function showRamadanWelcome(userName){
+  if(sessionStorage.getItem("ramadan_shown")) return;
+  sessionStorage.setItem("ramadan_shown","1");
+
+  const rmOverlay = document.createElement("div");
+  rmOverlay.id = "ramadan-overlay";
+  rmOverlay.innerHTML = `
+    <style>
+      #ramadan-overlay{
+        position:fixed;inset:0;z-index:99999;
+        background:linear-gradient(135deg,#0a0a2e 0%,#1a1a4e 30%,#0d1b3e 60%,#0a0a2e 100%);
+        display:flex;align-items:center;justify-content:center;flex-direction:column;
+        opacity:0;transition:opacity .6s ease;
+        overflow:hidden;
+      }
+      #ramadan-overlay.active{opacity:1}
+      #ramadan-overlay.fade-out{opacity:0}
+      .ramadan-stars{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+      .ramadan-star{
+        position:absolute;width:3px;height:3px;background:#fff;border-radius:50%;
+        animation:twinkle 2s ease-in-out infinite alternate;
+      }
+      @keyframes twinkle{0%{opacity:.2;transform:scale(.8)}100%{opacity:1;transform:scale(1.3)}}
+      .ramadan-moon{
+        position:absolute;top:8%;right:12%;width:80px;height:80px;
+        border-radius:50%;
+        background:transparent;
+        box-shadow:inset -20px 0 0 0 #ffd700;
+        filter:drop-shadow(0 0 20px rgba(255,215,0,.5));
+        animation:moonGlow 3s ease-in-out infinite alternate;
+      }
+      @keyframes moonGlow{0%{filter:drop-shadow(0 0 20px rgba(255,215,0,.4))}100%{filter:drop-shadow(0 0 35px rgba(255,215,0,.7))}}
+      .ramadan-lantern-container{
+        position:absolute;top:0;width:100%;display:flex;justify-content:space-around;
+        pointer-events:none;
+      }
+      .ramadan-lantern{
+        width:40px;margin-top:-10px;
+        animation:lanternSwing 3s ease-in-out infinite alternate;
+        transform-origin:top center;
+      }
+      .ramadan-lantern:nth-child(2){animation-delay:.5s;width:35px}
+      .ramadan-lantern:nth-child(3){animation-delay:1s;width:45px}
+      .ramadan-lantern:nth-child(4){animation-delay:1.5s;width:38px}
+      @keyframes lanternSwing{0%{transform:rotate(-8deg)}100%{transform:rotate(8deg)}}
+      .ramadan-lantern .lantern-rope{
+        width:2px;height:40px;background:linear-gradient(to bottom,#c9a84c,#ffd700);
+        margin:0 auto;
+      }
+      .ramadan-lantern .lantern-body{
+        width:100%;aspect-ratio:1/1.4;
+        background:linear-gradient(135deg,#c0392b,#e74c3c);
+        border-radius:30% 30% 45% 45%;
+        position:relative;
+        box-shadow:0 0 15px rgba(255,215,0,.4),inset 0 0 10px rgba(255,255,255,.1);
+      }
+      .ramadan-lantern .lantern-body::after{
+        content:"";position:absolute;top:50%;left:50%;
+        transform:translate(-50%,-50%);
+        width:50%;height:50%;
+        background:radial-gradient(circle,rgba(255,200,0,.6),transparent);
+        border-radius:50%;
+      }
+      .ramadan-lantern .lantern-cap{
+        width:60%;height:8px;
+        background:linear-gradient(to bottom,#c9a84c,#ffd700);
+        margin:0 auto;border-radius:3px 3px 0 0;
+      }
+      .ramadan-lantern .lantern-base{
+        width:40%;height:6px;
+        background:linear-gradient(to top,#c9a84c,#ffd700);
+        margin:0 auto;border-radius:0 0 3px 3px;
+      }
+      .ramadan-text{
+        text-align:center;z-index:2;
+        animation:fadeInUp .8s ease-out both;
+        animation-delay:.3s;
+      }
+      @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+      .ramadan-title{
+        font-family:'Cairo','Tajawal',sans-serif;
+        font-size:3rem;font-weight:900;
+        color:#ffd700;
+        text-shadow:0 0 30px rgba(255,215,0,.5),0 4px 15px rgba(0,0,0,.3);
+        margin-bottom:10px;
+        line-height:1.4;
+      }
+      .ramadan-welcome{
+        font-family:'Cairo','Tajawal',sans-serif;
+        font-size:1.2rem;color:rgba(255,255,255,.9);
+        margin-bottom:8px;
+      }
+      .ramadan-dua{
+        font-family:'Cairo','Tajawal',sans-serif;
+        font-size:1rem;color:rgba(255,215,0,.7);
+        font-style:italic;
+      }
+      .ramadan-mosque{
+        margin-top:20px;font-size:2.5rem;
+        animation:fadeInUp .8s ease-out both;
+        animation-delay:.6s;
+      }
+    </style>
+    <div class="ramadan-stars"></div>
+    <div class="ramadan-moon"></div>
+    <div class="ramadan-lantern-container">
+      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
+      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
+      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
+      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
+    </div>
+    <div class="ramadan-text">
+      <div class="ramadan-title">رمضان كريم</div>
+      <div class="ramadan-welcome">أهلاً ${userName ? userName : ""} .. كل عام وأنتم بخير</div>
+      <div class="ramadan-dua">اللهم بلّغنا رمضان وأعنّا على صيامه وقيامه</div>
+      <div class="ramadan-mosque">🕌</div>
+    </div>
+  `;
+  document.body.appendChild(rmOverlay);
+
+  // Create stars
+  const starsContainer = rmOverlay.querySelector(".ramadan-stars");
+  for(let i=0;i<60;i++){
+    const star = document.createElement("div");
+    star.className = "ramadan-star";
+    star.style.left = Math.random()*100+"%";
+    star.style.top = Math.random()*70+"%";
+    star.style.animationDelay = Math.random()*3+"s";
+    star.style.width = star.style.height = (Math.random()*2+1.5)+"px";
+    starsContainer.appendChild(star);
+  }
+
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{ rmOverlay.classList.add("active"); });
+  });
+
+  function dismiss(){
+    rmOverlay.classList.add("fade-out");
+    setTimeout(()=>{ if(rmOverlay.parentNode) rmOverlay.remove(); },700);
+  }
+
+  rmOverlay.addEventListener("click", dismiss);
+  setTimeout(dismiss, 3500);
 }
 
 function renderBlocked(ctx){
