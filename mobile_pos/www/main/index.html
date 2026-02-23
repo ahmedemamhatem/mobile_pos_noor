@@ -2210,7 +2210,8 @@ function showRamadanWelcome(userName){
     <style>
       #ramadan-overlay{
         position:fixed;inset:0;z-index:99999;
-        background:linear-gradient(135deg,#0a0a2e 0%,#1a1a4e 30%,#0d1b3e 60%,#0a0a2e 100%);
+        background:linear-gradient(135deg,rgba(10,10,46,.85) 0%,rgba(26,26,78,.85) 30%,rgba(13,27,62,.85) 60%,rgba(10,10,46,.85) 100%);
+        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
         display:flex;align-items:center;justify-content:center;flex-direction:column;
         opacity:0;transition:opacity .6s ease;
         overflow:hidden;
