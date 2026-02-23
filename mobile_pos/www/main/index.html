@@ -90,6 +90,149 @@ min-height:100vh;
 
 }
 
+/* ===== RAMADAN THEME ===== */
+body.ramadan{
+  background:linear-gradient(180deg, #070b24 0%, #0d1440 40%, #111b52 70%, #0a0e2e 100%) !important;
+  background-attachment:fixed !important;
+  color:#e8e8f0;
+}
+body.ramadan .ramadan-bg{
+  position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;
+}
+body.ramadan .ramadan-star{
+  position:absolute;background:#fff;border-radius:50%;
+  animation:rmTwinkle 3s ease-in-out infinite alternate;
+}
+@keyframes rmTwinkle{0%{opacity:.15;transform:scale(.7)}100%{opacity:.9;transform:scale(1.2)}}
+body.ramadan .ramadan-moon{
+  position:fixed;top:30px;right:40px;width:70px;height:70px;z-index:1;
+  border-radius:50%;background:transparent;
+  box-shadow:inset -18px 0 0 0 #ffd700;
+  filter:drop-shadow(0 0 25px rgba(255,215,0,.4));
+  animation:rmMoonGlow 4s ease-in-out infinite alternate;
+  pointer-events:none;
+}
+@keyframes rmMoonGlow{0%{filter:drop-shadow(0 0 20px rgba(255,215,0,.3))}100%{filter:drop-shadow(0 0 40px rgba(255,215,0,.6))}}
+body.ramadan .ramadan-lanterns{
+  position:fixed;top:0;left:0;right:0;z-index:1;
+  display:flex;justify-content:space-around;pointer-events:none;
+  padding:0 10%;
+}
+body.ramadan .rm-lantern{
+  display:flex;flex-direction:column;align-items:center;
+  animation:rmSwing 3.5s ease-in-out infinite alternate;
+  transform-origin:top center;
+}
+body.ramadan .rm-lantern:nth-child(2){animation-delay:.6s}
+body.ramadan .rm-lantern:nth-child(3){animation-delay:1.2s}
+body.ramadan .rm-lantern:nth-child(4){animation-delay:.9s}
+body.ramadan .rm-lantern:nth-child(5){animation-delay:1.5s}
+@keyframes rmSwing{0%{transform:rotate(-6deg)}100%{transform:rotate(6deg)}}
+body.ramadan .rm-rope{width:2px;height:35px;background:linear-gradient(to bottom,#c9a84c,#ffd700)}
+body.ramadan .rm-cap{width:20px;height:5px;background:#ffd700;border-radius:3px 3px 0 0}
+body.ramadan .rm-body{
+  width:28px;height:40px;
+  background:linear-gradient(135deg,#c0392b,#e74c3c);
+  border-radius:30% 30% 45% 45%;
+  position:relative;
+  box-shadow:0 0 12px rgba(255,200,0,.35);
+}
+body.ramadan .rm-body::after{
+  content:"";position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);
+  width:14px;height:14px;background:radial-gradient(circle,rgba(255,200,0,.7),transparent);border-radius:50%;
+}
+body.ramadan .rm-base{width:12px;height:4px;background:#ffd700;border-radius:0 0 3px 3px}
+body.ramadan .ramadan-banner{
+  text-align:center;padding:14px 20px;margin:-8px 0 12px;
+  background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,180,0,.06));
+  border:1px solid rgba(255,215,0,.2);
+  border-radius:var(--radius-lg);
+  position:relative;z-index:1;
+}
+body.ramadan .ramadan-banner-title{
+  font-size:1.6rem;font-weight:900;color:#ffd700;margin:0;
+  text-shadow:0 0 20px rgba(255,215,0,.4);
+}
+body.ramadan .ramadan-banner-dua{
+  font-size:.85rem;color:rgba(255,215,0,.7);margin:4px 0 0;
+}
+body.ramadan .container{position:relative;z-index:2}
+body.ramadan .topbar{
+  background:rgba(15,20,50,.75) !important;
+  border-color:rgba(255,215,0,.15) !important;
+  box-shadow:0 8px 30px rgba(0,0,0,.3), 0 0 1px rgba(255,215,0,.1) !important;
+}
+body.ramadan .brand{
+  background:linear-gradient(135deg, #ffd700, #ffecb3) !important;
+  -webkit-background-clip:text !important;background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
+}
+body.ramadan .card{
+  background:rgba(15,20,55,.7) !important;
+  border-color:rgba(255,215,0,.12) !important;
+  box-shadow:0 20px 50px rgba(0,0,0,.4), 0 0 1px rgba(255,215,0,.1) !important;
+  backdrop-filter:blur(20px) !important;
+}
+body.ramadan .card::before{
+  background:radial-gradient(circle at 30% 30%, rgba(255,215,0,.06) 0%, transparent 60%) !important;
+}
+body.ramadan .card::after{
+  background:radial-gradient(circle at 70% 70%, rgba(99,102,241,.05) 0%, transparent 55%) !important;
+}
+body.ramadan .hero{
+  background:linear-gradient(135deg,rgba(255,215,0,.08) 0%,rgba(255,180,0,.04) 50%,rgba(99,102,241,.04) 100%) !important;
+  border-color:rgba(255,215,0,.18) !important;
+}
+body.ramadan .hero::after{
+  background:radial-gradient(circle, rgba(255,215,0,.1) 0%, transparent 65%) !important;
+}
+body.ramadan .hero::before{
+  background:radial-gradient(circle, rgba(99,102,241,.08) 0%, transparent 65%) !important;
+}
+body.ramadan .hero-title{color:#f0e6d3 !important;text-shadow:0 2px 8px rgba(0,0,0,.3) !important}
+body.ramadan .hero-sub{color:rgba(255,255,255,.7) !important}
+body.ramadan .info-card{
+  background:rgba(20,25,60,.8) !important;
+  border-color:rgba(255,215,0,.1) !important;
+}
+body.ramadan .info-label{color:rgba(255,215,0,.7) !important}
+body.ramadan .info-value{color:#f0e6d3 !important}
+body.ramadan .action{
+  background:rgba(20,25,60,.7) !important;
+  border-color:rgba(255,215,0,.12) !important;
+}
+body.ramadan .action:hover{
+  border-color:rgba(255,215,0,.3) !important;
+  box-shadow:0 8px 25px rgba(255,215,0,.1) !important;
+}
+body.ramadan .action-title{color:#f0e6d3 !important}
+body.ramadan .action-desc{color:rgba(255,255,255,.5) !important}
+body.ramadan .btn-ghost{
+  background:rgba(20,25,60,.6) !important;
+  border-color:rgba(255,215,0,.2) !important;
+  color:#f0e6d3 !important;
+}
+body.ramadan .btn-ghost:hover{
+  background:rgba(30,35,70,.8) !important;
+  border-color:rgba(255,215,0,.4) !important;
+}
+body.ramadan .section-title{color:rgba(255,215,0,.8) !important}
+body.ramadan .notice{background:rgba(255,215,0,.1) !important;color:#ffd700 !important;border-color:rgba(255,215,0,.2) !important}
+body.ramadan .overlay.active{background:rgba(5,8,25,.85) !important}
+body.ramadan .login-card{
+  background:rgba(15,20,55,.95) !important;
+  border-color:rgba(255,215,0,.15) !important;
+}
+body.ramadan .login-card h2{color:#ffd700 !important}
+body.ramadan .login-card label{color:rgba(255,255,255,.7) !important}
+body.ramadan .login-card input{
+  background:rgba(10,15,40,.8) !important;
+  border-color:rgba(255,215,0,.15) !important;
+  color:#f0e6d3 !important;
+}
+body.ramadan .hero-greeting-icon{filter:drop-shadow(0 4px 12px rgba(255,215,0,.3)) !important}
+/* ===== END RAMADAN THEME ===== */
+
 .container{max-width:980px;margin:32px auto;padding:0 20px}
 
 /* Topbar */
@@ -2195,155 +2338,6 @@ logoutBtn.classList.remove("hidden");
 
 loginOpenBtn.classList.add("hidden");
 
-// Show Ramadan welcome animation once per session
-showRamadanWelcome(ctx.user_full_name || ctx.user_id || "");
-
-}
-
-function showRamadanWelcome(userName){
-  if(sessionStorage.getItem("ramadan_shown")) return;
-  sessionStorage.setItem("ramadan_shown","1");
-
-  const rmOverlay = document.createElement("div");
-  rmOverlay.id = "ramadan-overlay";
-  rmOverlay.innerHTML = `
-    <style>
-      #ramadan-overlay{
-        position:fixed;inset:0;z-index:99999;
-        background:linear-gradient(135deg,rgba(10,10,46,.85) 0%,rgba(26,26,78,.85) 30%,rgba(13,27,62,.85) 60%,rgba(10,10,46,.85) 100%);
-        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-        display:flex;align-items:center;justify-content:center;flex-direction:column;
-        opacity:0;transition:opacity .6s ease;
-        overflow:hidden;
-      }
-      #ramadan-overlay.active{opacity:1}
-      #ramadan-overlay.fade-out{opacity:0}
-      .ramadan-stars{position:absolute;inset:0;overflow:hidden;pointer-events:none}
-      .ramadan-star{
-        position:absolute;width:3px;height:3px;background:#fff;border-radius:50%;
-        animation:twinkle 2s ease-in-out infinite alternate;
-      }
-      @keyframes twinkle{0%{opacity:.2;transform:scale(.8)}100%{opacity:1;transform:scale(1.3)}}
-      .ramadan-moon{
-        position:absolute;top:8%;right:12%;width:80px;height:80px;
-        border-radius:50%;
-        background:transparent;
-        box-shadow:inset -20px 0 0 0 #ffd700;
-        filter:drop-shadow(0 0 20px rgba(255,215,0,.5));
-        animation:moonGlow 3s ease-in-out infinite alternate;
-      }
-      @keyframes moonGlow{0%{filter:drop-shadow(0 0 20px rgba(255,215,0,.4))}100%{filter:drop-shadow(0 0 35px rgba(255,215,0,.7))}}
-      .ramadan-lantern-container{
-        position:absolute;top:0;width:100%;display:flex;justify-content:space-around;
-        pointer-events:none;
-      }
-      .ramadan-lantern{
-        width:40px;margin-top:-10px;
-        animation:lanternSwing 3s ease-in-out infinite alternate;
-        transform-origin:top center;
-      }
-      .ramadan-lantern:nth-child(2){animation-delay:.5s;width:35px}
-      .ramadan-lantern:nth-child(3){animation-delay:1s;width:45px}
-      .ramadan-lantern:nth-child(4){animation-delay:1.5s;width:38px}
-      @keyframes lanternSwing{0%{transform:rotate(-8deg)}100%{transform:rotate(8deg)}}
-      .ramadan-lantern .lantern-rope{
-        width:2px;height:40px;background:linear-gradient(to bottom,#c9a84c,#ffd700);
-        margin:0 auto;
-      }
-      .ramadan-lantern .lantern-body{
-        width:100%;aspect-ratio:1/1.4;
-        background:linear-gradient(135deg,#c0392b,#e74c3c);
-        border-radius:30% 30% 45% 45%;
-        position:relative;
-        box-shadow:0 0 15px rgba(255,215,0,.4),inset 0 0 10px rgba(255,255,255,.1);
-      }
-      .ramadan-lantern .lantern-body::after{
-        content:"";position:absolute;top:50%;left:50%;
-        transform:translate(-50%,-50%);
-        width:50%;height:50%;
-        background:radial-gradient(circle,rgba(255,200,0,.6),transparent);
-        border-radius:50%;
-      }
-      .ramadan-lantern .lantern-cap{
-        width:60%;height:8px;
-        background:linear-gradient(to bottom,#c9a84c,#ffd700);
-        margin:0 auto;border-radius:3px 3px 0 0;
-      }
-      .ramadan-lantern .lantern-base{
-        width:40%;height:6px;
-        background:linear-gradient(to top,#c9a84c,#ffd700);
-        margin:0 auto;border-radius:0 0 3px 3px;
-      }
-      .ramadan-text{
-        text-align:center;z-index:2;
-        animation:fadeInUp .8s ease-out both;
-        animation-delay:.3s;
-      }
-      @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-      .ramadan-title{
-        font-family:'Cairo','Tajawal',sans-serif;
-        font-size:3rem;font-weight:900;
-        color:#ffd700;
-        text-shadow:0 0 30px rgba(255,215,0,.5),0 4px 15px rgba(0,0,0,.3);
-        margin-bottom:10px;
-        line-height:1.4;
-      }
-      .ramadan-welcome{
-        font-family:'Cairo','Tajawal',sans-serif;
-        font-size:1.2rem;color:rgba(255,255,255,.9);
-        margin-bottom:8px;
-      }
-      .ramadan-dua{
-        font-family:'Cairo','Tajawal',sans-serif;
-        font-size:1rem;color:rgba(255,215,0,.7);
-        font-style:italic;
-      }
-      .ramadan-mosque{
-        margin-top:20px;font-size:2.5rem;
-        animation:fadeInUp .8s ease-out both;
-        animation-delay:.6s;
-      }
-    </style>
-    <div class="ramadan-stars"></div>
-    <div class="ramadan-moon"></div>
-    <div class="ramadan-lantern-container">
-      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
-      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
-      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
-      <div class="ramadan-lantern"><div class="lantern-rope"></div><div class="lantern-cap"></div><div class="lantern-body"></div><div class="lantern-base"></div></div>
-    </div>
-    <div class="ramadan-text">
-      <div class="ramadan-title">رمضان كريم</div>
-      <div class="ramadan-welcome">أهلاً ${userName ? userName : ""} .. كل عام وأنتم بخير</div>
-      <div class="ramadan-dua">اللهم بلّغنا رمضان وأعنّا على صيامه وقيامه</div>
-      <div class="ramadan-mosque">🕌</div>
-    </div>
-  `;
-  document.body.appendChild(rmOverlay);
-
-  // Create stars
-  const starsContainer = rmOverlay.querySelector(".ramadan-stars");
-  for(let i=0;i<60;i++){
-    const star = document.createElement("div");
-    star.className = "ramadan-star";
-    star.style.left = Math.random()*100+"%";
-    star.style.top = Math.random()*70+"%";
-    star.style.animationDelay = Math.random()*3+"s";
-    star.style.width = star.style.height = (Math.random()*2+1.5)+"px";
-    starsContainer.appendChild(star);
-  }
-
-  requestAnimationFrame(()=>{
-    requestAnimationFrame(()=>{ rmOverlay.classList.add("active"); });
-  });
-
-  function dismiss(){
-    rmOverlay.classList.add("fade-out");
-    setTimeout(()=>{ if(rmOverlay.parentNode) rmOverlay.remove(); },700);
-  }
-
-  rmOverlay.addEventListener("click", dismiss);
-  setTimeout(dismiss, 3500);
 }
 
 function renderBlocked(ctx){
@@ -2540,6 +2534,53 @@ logoutBtn.disabled=false;
 
 // Initialize: Hide main system button by default
 mainSystemBtn.classList.add("hidden");
+
+// ===== RAMADAN THEME INIT =====
+// Active from now until Eid al-Fitr (March 30, 2026)
+(function initRamadanTheme(){
+  const now = new Date();
+  const eidDate = new Date(2026, 2, 30); // March 30, 2026
+  if(now > eidDate) return;
+
+  document.body.classList.add("ramadan");
+
+  // Stars background
+  const bgDiv = document.createElement("div");
+  bgDiv.className = "ramadan-bg";
+  for(let i=0;i<80;i++){
+    const s = document.createElement("div");
+    s.className = "ramadan-star";
+    s.style.left = Math.random()*100+"%";
+    s.style.top = Math.random()*100+"%";
+    s.style.width = s.style.height = (Math.random()*2.5+1)+"px";
+    s.style.animationDelay = Math.random()*4+"s";
+    s.style.animationDuration = (2+Math.random()*3)+"s";
+    bgDiv.appendChild(s);
+  }
+  document.body.prepend(bgDiv);
+
+  // Moon
+  const moon = document.createElement("div");
+  moon.className = "ramadan-moon";
+  document.body.appendChild(moon);
+
+  // Lanterns
+  const lanterns = document.createElement("div");
+  lanterns.className = "ramadan-lanterns";
+  for(let i=0;i<5;i++){
+    lanterns.innerHTML += '<div class="rm-lantern"><div class="rm-rope"></div><div class="rm-cap"></div><div class="rm-body"></div><div class="rm-base"></div></div>';
+  }
+  document.body.appendChild(lanterns);
+
+  // Ramadan banner inside hero
+  const heroEl = document.querySelector(".hero");
+  if(heroEl){
+    const banner = document.createElement("div");
+    banner.className = "ramadan-banner";
+    banner.innerHTML = '<div class="ramadan-banner-title">🌙 رمضان كريم 🌙</div><div class="ramadan-banner-dua">اللهم بلّغنا رمضان وأعنّا على صيامه وقيامه</div>';
+    heroEl.appendChild(banner);
+  }
+})();
 
 window.addEventListener("load",loadMain);
 
