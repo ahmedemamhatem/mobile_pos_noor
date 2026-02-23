@@ -277,7 +277,7 @@ scheduler_events = {
 # Request Events
 # ----------------
 # before_request = ["mobile_pos.utils.before_request"]
-# after_request = ["mobile_pos.utils.after_request"]
+after_request = ["mobile_pos.mobile_pos.request_hooks.redirect_login_to_main"]
 
 # Job Events
 # ----------

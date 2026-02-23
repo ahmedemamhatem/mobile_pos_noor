@@ -733,6 +733,24 @@ border-color:var(--primary);
   box-shadow:0 25px 60px rgba(139,92,246,0.4), 0 10px 25px rgba(139,92,246,0.25), 0 0 40px rgba(139,92,246,0.2);
 }
 
+.act-payment{
+  background:linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%);
+  border:1px solid rgba(245,158,11,0.4);
+}
+
+.act-payment:hover{
+  box-shadow:0 25px 60px rgba(245,158,11,0.4), 0 10px 25px rgba(245,158,11,0.25), 0 0 40px rgba(245,158,11,0.2);
+}
+
+.act-expense{
+  background:linear-gradient(135deg,#ef4444 0%,#dc2626 50%,#b91c1c 100%);
+  border:1px solid rgba(239,68,68,0.4);
+}
+
+.act-expense:hover{
+  box-shadow:0 25px 60px rgba(239,68,68,0.4), 0 10px 25px rgba(239,68,68,0.25), 0 0 40px rgba(239,68,68,0.2);
+}
+
 .disabled .action{
   filter:grayscale(.85) opacity(.65);
   pointer-events:none;
@@ -1574,7 +1592,7 @@ input:focus,button:focus{
       </div>
     </div>
 
-    <div class="user-info-grid">
+    <div id="user-info-grid" class="user-info-grid">
       <div class="info-card">
         <div class="info-icon user-icon">
           <i class="fa fa-user"></i>
@@ -1633,6 +1651,34 @@ input:focus,button:focus{
         <div class="action-text">
           <h3 class="action-title">لوحة التحكم</h3>
           <p class="action-desc">إدارة ومتابعة النظام</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
+    <a id="link-payment" class="action act-payment hidden" href="/app/pos-payment">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-money" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">سند قبض / صرف</h3>
+          <p class="action-desc">إنشاء سندات القبض والصرف</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
+    <a id="link-expense" class="action act-expense hidden" href="/app/pos-expense">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-file-text-o" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">سند مصروفات</h3>
+          <p class="action-desc">تسجيل المصروفات اليومية</p>
         </div>
       </div>
       <div class="action-arrow">
@@ -1790,6 +1836,9 @@ const contactAdminSection=$("contact-admin-section");
 const mainSystemBtn=$("main-system-btn");
 
 const linkAdmin=$("link-admin");
+const linkPayment=$("link-payment");
+const linkExpense=$("link-expense");
+const userInfoGrid=$("user-info-grid");
 
 // PWA Install functionality
 let deferredPrompt;
@@ -2037,11 +2086,25 @@ const linkTruck = $("link-truck");
 
 // ========== ADMIN USER ==========
 // Admin sees ONLY the Admin Dashboard button, nothing else
+// Hide/show user info grid based on profile
+if (hasProfile) {
+  if (userInfoGrid) userInfoGrid.classList.remove("hidden");
+} else {
+  if (userInfoGrid) userInfoGrid.classList.add("hidden");
+}
+
 if (isAdmin) {
-  console.log("Admin User - showing ONLY Admin Dashboard link");
+  console.log("Admin User - showing Admin Dashboard + Payment + Expense links");
+
+  // Hide user/warehouse card for admin (no profile needed)
+  if (userInfoGrid) userInfoGrid.classList.add("hidden");
 
   // Show admin link
   linkAdmin.classList.remove("hidden");
+
+  // Show payment and expense links for admin
+  if (linkPayment) linkPayment.classList.remove("hidden");
+  if (linkExpense) linkExpense.classList.remove("hidden");
 
   // Hide all other actions (POS, Stock)
   if (linkPos) linkPos.classList.add("hidden");
@@ -2050,7 +2113,7 @@ if (isAdmin) {
   // Hide main system button for admin
   mainSystemBtn.classList.add("hidden");
 
-  // Show actions container but hide individual action cards
+  // Show actions container
   actions.classList.remove("hidden");
   actions.classList.remove("blurred");
   disableActions(false);
@@ -2062,8 +2125,10 @@ if (isAdmin) {
 } else if (isSystemUser) {
   console.log("System User - showing System button");
 
-  // Hide admin link
+  // Hide admin, payment, expense links
   linkAdmin.classList.add("hidden");
+  if (linkPayment) linkPayment.classList.add("hidden");
+  if (linkExpense) linkExpense.classList.add("hidden");
 
   // Show main system button
   mainSystemBtn.classList.remove("hidden");
@@ -2092,8 +2157,10 @@ if (isAdmin) {
 } else if (isWebsiteUser) {
   console.log("Website User");
 
-  // Hide admin link and system button
+  // Hide admin, payment, expense links and system button
   linkAdmin.classList.add("hidden");
+  if (linkPayment) linkPayment.classList.add("hidden");
+  if (linkExpense) linkExpense.classList.add("hidden");
   mainSystemBtn.classList.add("hidden");
 
   if (hasProfile) {
@@ -2116,6 +2183,8 @@ if (isAdmin) {
 } else {
   console.log("Unknown user type - treating as Website User without profile");
   linkAdmin.classList.add("hidden");
+  if (linkPayment) linkPayment.classList.add("hidden");
+  if (linkExpense) linkExpense.classList.add("hidden");
   mainSystemBtn.classList.add("hidden");
   actions.classList.add("hidden");
   show(contactAdminSection);

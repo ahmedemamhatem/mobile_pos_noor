@@ -422,6 +422,13 @@ def mini_pos_ledger(customer):
     profile = get_profile_or_throw()
     company = profile.company
 
+    # Build profile filter for GL Entry if mini_pos_profile dimension exists
+    gl_profile_filter = ""
+    gl_params = [customer, company]
+    if frappe.get_meta("GL Entry").has_field("mini_pos_profile"):
+        gl_profile_filter = "AND mini_pos_profile=%s"
+        gl_params.append(profile.name)
+
     entries = frappe.db.sql("""
         SELECT
             posting_date,
@@ -437,9 +444,10 @@ def mini_pos_ledger(customer):
           AND party=%s
           AND company=%s
           AND docstatus=1
+          {gl_profile_filter}
         ORDER BY posting_date, creation
         LIMIT 200
-    """, (customer, company), as_dict=1)
+    """.format(gl_profile_filter=gl_profile_filter), gl_params, as_dict=1)
 
     balance = 0
     for e in entries:
@@ -537,7 +545,7 @@ def mini_pos_stock_balance(warehouse=None, items=None):
 
     return frappe.db.sql(query, params, as_dict=1)
 
-def check_duplicate_invoice(customer, items, company=None):
+def check_duplicate_invoice(customer, items, company=None, profile_name=None):
     """
     Check if a similar invoice exists for the same customer with same items and quantities
     within the last 3 hours. Returns the duplicate invoice details if found, None otherwise.
@@ -553,6 +561,13 @@ def check_duplicate_invoice(customer, items, company=None):
     }
     if company:
         filters["company"] = company
+
+    # Filter by mini_pos_profile
+    if profile_name:
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            filters["mini_pos_profile"] = profile_name
+        else:
+            filters["custom_mini_pos_profile"] = profile_name
 
     recent_invoices = frappe.get_all(
         "Sales Invoice",
@@ -682,7 +697,7 @@ def mini_pos_create_invoice(data):
 
     # Check for duplicate invoice (same customer, same items/qty within 3 hours)
     if not is_return:
-        duplicate_invoice = check_duplicate_invoice(customer, items, company=profile.company)
+        duplicate_invoice = check_duplicate_invoice(customer, items, company=profile.company, profile_name=profile.name)
         if duplicate_invoice:
             return {
                 "duplicate": True,
@@ -1413,8 +1428,12 @@ def mini_pos_cancel_invoice(invoice_name):
         # Get the invoice
         invoice = frappe.get_doc("Sales Invoice", invoice_name)
 
-        # Verify the invoice belongs to the user's company
+        # Verify the invoice belongs to the user's company and profile
         if invoice.company != profile.company:
+            frappe.throw(_("You don't have access to this invoice"))
+
+        invoice_profile = invoice.get("mini_pos_profile") or invoice.get("custom_mini_pos_profile")
+        if invoice_profile and invoice_profile != profile.name:
             frappe.throw(_("You don't have access to this invoice"))
 
         # Check if already cancelled
@@ -1468,14 +1487,22 @@ def mini_pos_get_customer_invoices(customer):
     profile = get_profile_or_throw()
     company = profile.company
 
+    filters = {
+        "customer": customer,
+        "company": company,
+        "docstatus": 1,
+        "is_return": 0  # Exclude return invoices
+    }
+
+    # Filter by mini_pos_profile
+    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+        filters["mini_pos_profile"] = profile.name
+    else:
+        filters["custom_mini_pos_profile"] = profile.name
+
     invoices = frappe.get_all(
         "Sales Invoice",
-        filters={
-            "customer": customer,
-            "company": company,
-            "docstatus": 1,
-            "is_return": 0  # Exclude return invoices
-        },
+        filters=filters,
         fields=["name", "posting_date", "grand_total", "outstanding_amount", "custom_hash"],
         order_by="posting_date desc",
         limit=50
@@ -1534,6 +1561,12 @@ def mini_pos_customer_invoices(customer):
     profile = get_profile_or_throw()
     company = profile.company
 
+    # Build profile filter
+    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+        profile_filter = "AND si.mini_pos_profile = %s"
+    else:
+        profile_filter = "AND si.custom_mini_pos_profile = %s"
+
     invoices = frappe.db.sql("""
         SELECT
             si.name,
@@ -1549,9 +1582,10 @@ def mini_pos_customer_invoices(customer):
         WHERE si.customer = %s
           AND si.company = %s
           AND si.docstatus = 1
+          {profile_filter}
         ORDER BY si.posting_date DESC, si.posting_time DESC
         LIMIT 50
-    """, (customer, company), as_dict=1)
+    """.format(profile_filter=profile_filter), (customer, company, profile.name), as_dict=1)
 
     return invoices
 
@@ -1563,6 +1597,12 @@ def mini_pos_invoice_details(invoice_name):
 
     profile = get_profile_or_throw()
     company = profile.company
+
+    # Build profile filter
+    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+        inv_profile_filter = "AND si.mini_pos_profile = %s"
+    else:
+        inv_profile_filter = "AND si.custom_mini_pos_profile = %s"
 
     # Get invoice header
     invoice = frappe.db.sql("""
@@ -1587,7 +1627,8 @@ def mini_pos_invoice_details(invoice_name):
         WHERE si.name = %s
           AND si.company = %s
           AND si.docstatus = 1
-    """, (invoice_name, company), as_dict=1)
+          {inv_profile_filter}
+    """.format(inv_profile_filter=inv_profile_filter), (invoice_name, company, profile.name), as_dict=1)
 
     if not invoice:
         frappe.throw("Invoice not found.")
@@ -1749,6 +1790,14 @@ def mini_pos_get_customer_sold_items(customer, search_term=None):
     if search_term:
         search_condition = "AND (sii.item_name LIKE %(search)s OR sii.item_code LIKE %(search)s)"
 
+    # Build profile filter
+    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+        sold_profile_filter = "AND si.mini_pos_profile = %(profile)s"
+        sold_profile_filter2 = "AND si2.mini_pos_profile = %(profile)s"
+    else:
+        sold_profile_filter = "AND si.custom_mini_pos_profile = %(profile)s"
+        sold_profile_filter2 = "AND si2.custom_mini_pos_profile = %(profile)s"
+
     # Get unique items sold to this customer with their last sold rate
     items = frappe.db.sql("""
         SELECT DISTINCT
@@ -1763,6 +1812,7 @@ def mini_pos_get_customer_sold_items(customer, search_term=None):
                   AND si2.customer = %(customer)s
                   AND si2.company = %(company)s
                   AND si2.docstatus = 1
+                  {sold_profile_filter2}
                 ORDER BY si2.posting_date DESC, si2.creation DESC
                 LIMIT 1
             ) as rate
@@ -1771,12 +1821,14 @@ def mini_pos_get_customer_sold_items(customer, search_term=None):
         WHERE si.customer = %(customer)s
           AND si.company = %(company)s
           AND si.docstatus = 1
+          {sold_profile_filter}
           {search_condition}
         ORDER BY sii.item_name ASC
         LIMIT 100
-    """.format(search_condition=search_condition), {
+    """.format(search_condition=search_condition, sold_profile_filter=sold_profile_filter, sold_profile_filter2=sold_profile_filter2), {
         "customer": customer,
         "company": company,
+        "profile": profile.name,
         "search": f"%{search_term}%" if search_term else None
     }, as_dict=True)
 

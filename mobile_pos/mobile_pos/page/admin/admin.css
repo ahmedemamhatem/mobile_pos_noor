@@ -2,6 +2,25 @@
    Admin Dashboard - Clean Modern Light Theme
    ============================================ */
 
+/* Force white background on entire page */
+body[data-route="admin"],
+body[data-route="admin"] #page-admin,
+body[data-route="admin"] .page-container,
+body[data-route="admin"] .page-body,
+body[data-route="admin"] .main-section,
+body[data-route="admin"] .layout-main-section,
+body[data-route="admin"] .layout-main,
+body[data-route="admin"] .container-fluid,
+body[data-route="admin"] .row,
+#page-admin,
+#page-admin .page-container,
+#page-admin .page-body,
+#page-admin .layout-main-section,
+#page-admin .layout-main {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+}
+
 /* ==================== Custom Admin Header ==================== */
 .admin-header {
     display: flex;
@@ -205,7 +224,7 @@
     --text-secondary: #64748b;
     --text-muted: #94a3b8;
 
-    --bg-page: #f8fafc;
+    --bg-page: #ffffff;
     --bg-card: #ffffff;
     --bg-hover: #f1f5f9;
     --bg-active: #e2e8f0;
@@ -3862,6 +3881,14 @@ html, body {
 .main-section {
     overflow-x: hidden !important;
     max-width: 100vw !important;
+    background: #ffffff !important;
+}
+
+[data-page-container="admin"] .layout-main,
+[data-page-container="admin"] .page-body,
+[data-page-container="admin"] .container-fluid,
+[data-page-container="admin"] {
+    background: #ffffff !important;
 }
 
 /* Fluid Typography - Numbers scale based on viewport */

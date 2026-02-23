@@ -5,9 +5,12 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
         single_column: true
     });
 
-    // Hide Frappe navbar
+    // Hide Frappe navbar and force white background
     $('header.navbar').hide();
     $('.page-head').hide();
+    $(wrapper).css('background', '#ffffff');
+    $(wrapper).parents().css('background', '#ffffff');
+    $('body').css('background', '#ffffff');
 
     // Add page content with custom header
     $(wrapper).find('.layout-main-section').html(`
@@ -82,8 +85,12 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                         <i class="fa fa-cubes"></i>
                     </div>
                     <div class="summary-content">
-                        <div class="summary-label">إجمالي المخزون</div>
+                        <div class="summary-label">إجمالي المخزون (تكلفة)</div>
                         <div class="summary-value" id="summary-stock">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-label" style="margin-top:4px;">إجمالي المخزون (بيع)</div>
+                        <div class="summary-value" id="summary-stock-selling">
                             <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
                         </div>
                         <div class="summary-meta">
@@ -297,6 +304,8 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                             <div class="pf-value" id="perf-change-value">0%</div>
                         </div>
                     </div>
+
+                    <div id="weekly-trend" class="weekly-trend-container" style="margin-top: 12px;"></div>
 
                 </div>
 
@@ -769,6 +778,69 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                         </div>
                     </div>
                 </div>
+
+                <!-- Profit Analysis Section -->
+                <div class="dashboard-section" data-animate="21">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fa fa-line-chart"></i>
+                            تحليل الأرباح
+                        </h3>
+                        <div class="section-badge">هذا الشهر</div>
+                    </div>
+
+                    <div class="profit-summary">
+                        <div class="profit-card revenue">
+                            <div class="profit-icon"><i class="fa fa-arrow-down"></i></div>
+                            <div class="profit-content">
+                                <div class="profit-label">الإيرادات</div>
+                                <div class="profit-value" id="profit-revenue">0</div>
+                            </div>
+                        </div>
+                        <div class="profit-card cost">
+                            <div class="profit-icon"><i class="fa fa-arrow-up"></i></div>
+                            <div class="profit-content">
+                                <div class="profit-label">التكلفة</div>
+                                <div class="profit-value" id="profit-cost">0</div>
+                            </div>
+                        </div>
+                        <div class="profit-card profit">
+                            <div class="profit-icon"><i class="fa fa-money"></i></div>
+                            <div class="profit-content">
+                                <div class="profit-label">صافي الربح</div>
+                                <div class="profit-value" id="profit-net">0</div>
+                            </div>
+                        </div>
+                        <div class="profit-card margin">
+                            <div class="profit-icon"><i class="fa fa-percent"></i></div>
+                            <div class="profit-content">
+                                <div class="profit-label">هامش الربح</div>
+                                <div class="profit-value" id="profit-margin">0%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="data-card" style="margin-top: 12px;">
+                        <div class="card-header with-count">
+                            <h4><i class="fa fa-diamond"></i> أكثر الأصناف ربحية</h4>
+                            <span class="record-count" id="profitable-items-count">0 صنف</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="tbl-profitable-items">
+                                <thead>
+                                    <tr>
+                                        <th>الصنف</th>
+                                        <th>الربح</th>
+                                        <th>الهامش</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="3" class="empty-row"><span class="skeleton" style="width:150px;height:20px;display:inline-block"></span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Row 2: Monthly Comparison, Inventory Turnover -->
@@ -903,6 +975,72 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                     </div>
                 </div>
 
+            </div>
+
+            <!-- Aging Report Section -->
+            <div class="dashboard-section" data-animate="28">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <i class="fa fa-clock-o"></i>
+                        تقرير أعمار الديون
+                    </h3>
+                    <div class="section-badge">حسب تاريخ الفاتورة</div>
+                </div>
+
+                <div class="aging-grid">
+                    <div class="data-card aging-card safe">
+                        <div class="card-header with-count">
+                            <h4>0-30 يوم</h4>
+                            <span class="record-count" id="aging-count-30">0 عميل</span>
+                        </div>
+                        <div class="summary-value" id="aging-total-30" style="padding: 8px 18px; font-size: 18px; font-weight: 700; color: #22c55e;">0</div>
+                        <div class="table-container">
+                            <table id="tbl-aging-30">
+                                <thead><tr><th>العميل</th><th>الرصيد</th></tr></thead>
+                                <tbody><tr><td colspan="2" class="empty-row">-</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="data-card aging-card warning">
+                        <div class="card-header with-count">
+                            <h4>31-60 يوم</h4>
+                            <span class="record-count" id="aging-count-60">0 عميل</span>
+                        </div>
+                        <div class="summary-value" id="aging-total-60" style="padding: 8px 18px; font-size: 18px; font-weight: 700; color: #f59e0b;">0</div>
+                        <div class="table-container">
+                            <table id="tbl-aging-60">
+                                <thead><tr><th>العميل</th><th>الرصيد</th></tr></thead>
+                                <tbody><tr><td colspan="2" class="empty-row">-</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="data-card aging-card danger">
+                        <div class="card-header with-count">
+                            <h4>61-90 يوم</h4>
+                            <span class="record-count" id="aging-count-90">0 عميل</span>
+                        </div>
+                        <div class="summary-value" id="aging-total-90" style="padding: 8px 18px; font-size: 18px; font-weight: 700; color: #f97316;">0</div>
+                        <div class="table-container">
+                            <table id="tbl-aging-90">
+                                <thead><tr><th>العميل</th><th>الرصيد</th></tr></thead>
+                                <tbody><tr><td colspan="2" class="empty-row">-</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="data-card aging-card critical">
+                        <div class="card-header with-count">
+                            <h4>أكثر من 90 يوم</h4>
+                            <span class="record-count" id="aging-count-over">0 عميل</span>
+                        </div>
+                        <div class="summary-value" id="aging-total-over" style="padding: 8px 18px; font-size: 18px; font-weight: 700; color: #ef4444;">0</div>
+                        <div class="table-container">
+                            <table id="tbl-aging-over">
+                                <thead><tr><th>العميل</th><th>الرصيد</th></tr></thead>
+                                <tbody><tr><td colspan="2" class="empty-row">-</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -1429,6 +1567,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
         // Update summary chips with animation
         $('#chip-items').text(`${fmt(summary.item_count || 0)} أصناف`);
         animateValue($('#summary-stock'), 0, summary.total_value || 0);
+        animateValue($('#summary-stock-selling'), 0, summary.total_selling_value || 0);
 
         // Filter by search term
         if (searchTerm) {
@@ -1469,7 +1608,6 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
     function renderPayments(payments, searchTerm = '') {
         paymentsData = payments;
         let rows = payments.balances || [];
-        const total = Number(payments.grand_total || 0);
 
         // Filter by search
         if (searchTerm) {
@@ -1477,7 +1615,8 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
             rows = rows.filter(b => (b.mode_of_payment || '').toLowerCase().includes(term));
         }
 
-        $('#chip-mop').text(`${fmt(payments.balances?.length || 0)} خزن`);
+        const total = rows.reduce((s, b) => s + Number(b.amount || 0), 0);
+        $('#chip-mop').text(`${fmt(rows.length)} خزن`);
         $('#payment-count').text(`${fmt(rows.length)} خزنة`);
         animateValue($('#summary-payment'), 0, total);
 
@@ -1507,21 +1646,6 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
         customersData = data;
         let profiles = data.profiles || [];
 
-        // Calculate totals from all profiles
-        let totalCustomers = 0;
-        let total = 0;
-        let totalPositive = 0;
-        let totalNegative = 0;
-
-        profiles.forEach(p => {
-            totalCustomers += p.customer_count || 0;
-            total += p.total_balance || 0;
-            (p.customers || []).forEach(c => {
-                if (c.balance > 0) totalPositive += c.balance;
-                if (c.balance < 0) totalNegative += c.balance;
-            });
-        });
-
         // Filter by search term
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
@@ -1543,6 +1667,21 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 return null;
             }).filter(p => p !== null);
         }
+
+        // Calculate totals from visible (filtered) profiles
+        let totalCustomers = 0;
+        let total = 0;
+        let totalPositive = 0;
+        let totalNegative = 0;
+
+        profiles.forEach(p => {
+            totalCustomers += p.customer_count || 0;
+            total += p.total_balance || 0;
+            (p.customers || []).forEach(c => {
+                if (c.balance > 0) totalPositive += c.balance;
+                if (c.balance < 0) totalNegative += c.balance;
+            });
+        });
 
         $('#chip-customers').text(`${fmt(totalCustomers)} عملاء`);
         $('#customer-count').text(`${fmt(totalCustomers)} عميل`);
@@ -1653,12 +1792,11 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
             );
         }
 
-        const allSuppliers = data.suppliers || [];
-        const total = allSuppliers.reduce((s, c) => s + (c.balance || 0), 0);
-        const totalPositive = allSuppliers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
-        const totalNegative = allSuppliers.reduce((s, c) => s + (c.balance < 0 ? c.balance : 0), 0);
+        const total = suppliers.reduce((s, c) => s + (c.balance || 0), 0);
+        const totalPositive = suppliers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
+        const totalNegative = suppliers.reduce((s, c) => s + (c.balance < 0 ? c.balance : 0), 0);
 
-        $('#chip-suppliers').text(`${fmt(allSuppliers.length)} موردين`);
+        $('#chip-suppliers').text(`${fmt(suppliers.length)} موردين`);
         $('#supplier-count').text(`${fmt(suppliers.length)} مورد`);
         animateValue($('#summary-supplier'), 0, total);
         animateValue($('#total-supplier-positive'), 0, totalPositive);

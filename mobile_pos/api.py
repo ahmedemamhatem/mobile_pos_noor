@@ -223,6 +223,12 @@ def get_daily_sales(date=None) -> Dict[str, Any]:
         # -------------------------
         # 5) Get sales data grouped by item
         # -------------------------
+        # Build profile filter - prefer mini_pos_profile field, fallback to custom_mini_pos_profile
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            profile_filter = "AND si.mini_pos_profile = %s"
+        else:
+            profile_filter = "AND si.custom_mini_pos_profile = %s"
+
         items_data = frappe.db.sql("""
             SELECT
                 sii.item_code,
@@ -234,9 +240,10 @@ def get_daily_sales(date=None) -> Dict[str, Any]:
             WHERE si.posting_date = %s
               AND sii.warehouse = %s
               AND si.docstatus = 1
+              {profile_filter}
             GROUP BY sii.item_code
             ORDER BY sii.item_name ASC
-        """, (date, warehouse), as_dict=True)
+        """.format(profile_filter=profile_filter), (date, warehouse, profile.name), as_dict=True)
 
         # Calculate total amount
         total_amount = sum(item.get("amount", 0) for item in items_data)
@@ -536,7 +543,7 @@ def get_mode_of_payment_for_company(doctype, txt, searchfield, start, page_len, 
     })
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_stock_balances(sort_by=None, sort_order="desc", limit=None, group_by="warehouse", company=None):
     """
     Get stock balances as a flat table - one row per item with total qty and value across all warehouses.
@@ -551,14 +558,32 @@ def get_admin_stock_balances(sort_by=None, sort_order="desc", limit=None, group_
         company_filter = "INNER JOIN `tabWarehouse` w ON w.name = b.warehouse AND w.company = %(company)s"
         params["company"] = company
 
-    # Get items with total qty and value across all warehouses
+    # Get the default selling price list
+    default_price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list") or ""
+    params["default_price_list"] = default_price_list
+
+    # Get items with total qty, value, and selling rate from default price list
     items_sql = f"""
         SELECT
             b.item_code,
             COALESCE(it.item_name, b.item_code) AS item_name,
             COALESCE(it.stock_uom, '') AS stock_uom,
             SUM(b.actual_qty) AS total_qty,
-            SUM(b.actual_qty * b.valuation_rate) AS total_value
+            SUM(b.actual_qty * b.valuation_rate) AS total_value,
+            CASE WHEN SUM(b.actual_qty) != 0
+                 THEN SUM(b.actual_qty * b.valuation_rate) / SUM(b.actual_qty)
+                 ELSE 0 END AS valuation_rate,
+            COALESCE(
+                (SELECT ip.price_list_rate *
+                    COALESCE(
+                        (SELECT ucd.conversion_factor FROM `tabUOM Conversion Detail` ucd
+                         WHERE ucd.parent = ip.item_code AND ucd.uom = ip.uom LIMIT 1),
+                    1)
+                 FROM `tabItem Price` ip
+                 WHERE ip.item_code = b.item_code AND ip.selling = 1
+                    AND ip.price_list = %(default_price_list)s
+                 ORDER BY ip.modified DESC LIMIT 1),
+            0) AS selling_rate
         FROM `tabBin` b
         {company_filter}
         LEFT JOIN `tabItem` it ON it.name = b.item_code
@@ -571,6 +596,7 @@ def get_admin_stock_balances(sort_by=None, sort_order="desc", limit=None, group_
     # Summary totals
     total_qty = sum(_as_float(item.total_qty) for item in items)
     total_value = sum(_as_float(item.total_value) for item in items)
+    total_selling_value = sum(_as_float(item.selling_rate) * _as_float(item.total_qty) for item in items)
     unique_items = len(items)
 
     # Format items for response
@@ -581,7 +607,9 @@ def get_admin_stock_balances(sort_by=None, sort_order="desc", limit=None, group_
             "item_name": _coalesce_str(item.item_name, item.item_code),
             "stock_uom": _coalesce_str(item.stock_uom, ""),
             "balance": _as_float(item.total_qty),
-            "value": _as_float(item.total_value)
+            "value": _as_float(item.total_value),
+            "valuation_rate": _as_float(item.valuation_rate),
+            "selling_rate": _as_float(item.selling_rate)
         })
 
     # Sort items
@@ -604,6 +632,7 @@ def get_admin_stock_balances(sort_by=None, sort_order="desc", limit=None, group_
         "summary": {
             "total_qty": _as_float(total_qty),
             "total_value": _as_float(total_value),
+            "total_selling_value": _as_float(total_selling_value),
             "item_count": unique_items
         }
     }
@@ -636,7 +665,7 @@ def _get_account_balance(account, from_date=None, to_date=None, company=None):
     return flt(balance)
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_payment_balances(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
@@ -713,7 +742,7 @@ def get_admin_payment_balances(
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_customer_balances(from_date=None, to_date=None, sort_by=None, sort_order="desc", limit=None, company=None):
     """
     Get customer balances grouped by Mini POS Profile.
@@ -791,13 +820,63 @@ def get_admin_customer_balances(from_date=None, to_date=None, sort_by=None, sort
                 "customers": customers
             })
 
+    # Include customers not assigned to any Mini POS Profile (or assigned to disabled profiles)
+    unassigned_sql = f"""
+        SELECT
+            gle.party AS customer,
+            COALESCE(c.customer_name, gle.party) AS customer_name,
+            SUM(gle.debit - gle.credit) AS balance_raw
+        FROM `tabGL Entry` gle
+        LEFT JOIN `tabCustomer` c ON c.name = gle.party
+        WHERE gle.docstatus = 1
+          AND gle.is_cancelled = 0
+          AND gle.party_type = 'Customer'
+          AND IFNULL(gle.party,'') != ''
+          AND (c.custom_mini_pos_profile IS NULL
+               OR c.custom_mini_pos_profile = ''
+               OR c.custom_mini_pos_profile IN (
+                   SELECT name FROM `tabMini POS Profile` WHERE disabled = 1
+               ))
+          {date_clause}
+        GROUP BY gle.party, c.customer_name
+    """
+    unassigned_rows = frappe.db.sql(unassigned_sql, date_params, as_dict=True)
+
+    if unassigned_rows:
+        unassigned_customers = []
+        unassigned_total = 0
+        for r in unassigned_rows:
+            bal = _as_float(r.balance_raw)
+            unassigned_total += bal
+            unassigned_customers.append({
+                "customer": r.customer,
+                "customer_name": _coalesce_str(r.customer_name, r.customer),
+                "balance": bal,
+                "status": _customer_status(bal),
+            })
+
+        reverse = (sort_order == "desc")
+        unassigned_customers.sort(key=lambda x: x.get(sort_by) or 0 if sort_by else x["balance"], reverse=reverse)
+
+        if limit and limit > 0:
+            unassigned_customers = unassigned_customers[:limit]
+
+        if unassigned_customers:
+            result.append({
+                "profile": "__unassigned__",
+                "profile_name": "بدون بروفايل",
+                "total_balance": unassigned_total,
+                "customer_count": len(unassigned_customers),
+                "customers": unassigned_customers
+            })
+
     # Sort profiles by total balance
     result.sort(key=lambda x: x["total_balance"], reverse=True)
 
     return {"profiles": result}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_supplier_balances(from_date=None, to_date=None, sort_by=None, sort_order="desc", limit=None, company=None):
     company = _resolve_company(company)
     sort_by, sort_order, limit = _mobile_args({"sort_by": sort_by, "sort_order": sort_order, "limit": limit})
@@ -849,7 +928,7 @@ def get_admin_supplier_balances(from_date=None, to_date=None, sort_by=None, sort
     return {"suppliers": suppliers}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_expenses(from_date=None, to_date=None, sort_order="desc", limit=None, company=None):
     """
     Get expenses from Journal Entries, grouped by Expense name.
@@ -939,7 +1018,7 @@ def get_admin_expenses(from_date=None, to_date=None, sort_order="desc", limit=No
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_sales_summary(from_date=None, to_date=None, company=None):
     """
     Get total sales and outstanding sales invoices.
@@ -1004,7 +1083,7 @@ def get_admin_sales_summary(from_date=None, to_date=None, company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_purchase_summary(from_date=None, to_date=None, company=None):
     """
     Get total purchases and outstanding purchase invoices.
@@ -1070,7 +1149,7 @@ def get_admin_purchase_summary(from_date=None, to_date=None, company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_today_sales(company=None):
     """
     Get today's sales summary with comparison to yesterday.
@@ -1138,7 +1217,7 @@ def get_admin_today_sales(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_sales_by_profile(from_date=None, to_date=None, company=None):
     """
     Get sales breakdown by Mini POS Profile (distributor).
@@ -1211,7 +1290,7 @@ def get_admin_sales_by_profile(from_date=None, to_date=None, company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_low_stock_items(threshold=10, company=None):
     """
     Get items with low stock (below threshold or reorder level).
@@ -1277,7 +1356,7 @@ def get_admin_low_stock_items(threshold=10, company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_daily_cash_flow(date=None, company=None):
     """
     Get daily cash flow - money in vs money out.
@@ -1366,7 +1445,7 @@ def get_admin_daily_cash_flow(date=None, company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_sales_performance(company=None):
     """
     Get sales performance - this month vs last month, weekly trend.
@@ -1479,7 +1558,7 @@ def get_admin_sales_performance(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_top_customers(limit=10, company=None):
     """
     Get top customers by sales volume with trends.
@@ -1557,7 +1636,7 @@ def get_admin_top_customers(limit=10, company=None):
     return {"customers": customers, "count": len(customers)}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_top_suppliers(limit=10, company=None):
     """
     Get top suppliers by purchase volume.
@@ -1606,7 +1685,7 @@ def get_admin_top_suppliers(limit=10, company=None):
     return {"suppliers": suppliers, "count": len(suppliers)}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_profit_analysis(company=None):
     """
     Get profit analysis - gross profit, margins.
@@ -1706,7 +1785,7 @@ def get_admin_profit_analysis(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_inventory_turnover(company=None):
     """
     Get inventory turnover - fast vs slow moving items.
@@ -1789,7 +1868,7 @@ def get_admin_inventory_turnover(company=None):
         LEFT JOIN `tabItem` it ON it.name = b.item_code
         WHERE it.disabled = 0
         GROUP BY b.item_code, it.item_name
-        HAVING current_stock > 0 AND qty_sold = 0
+        HAVING current_stock > 0 AND qty_sold < 0.01
         ORDER BY current_stock DESC
         LIMIT 10
     """
@@ -1806,7 +1885,7 @@ def get_admin_inventory_turnover(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_monthly_comparison(company=None):
     """
     Get monthly comparison for last 6 months.
@@ -1868,7 +1947,7 @@ def get_admin_monthly_comparison(company=None):
     return {"months": months, "max_sales": max_sales}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_sales_by_hour(company=None):
     """
     Get sales by hour for peak hours analysis.
@@ -1925,7 +2004,7 @@ def get_admin_sales_by_hour(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_aging_report(company=None):
     """
     Get customer debt aging report (30/60/90 days).
@@ -2013,7 +2092,7 @@ def get_admin_aging_report(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_expected_collections(company=None):
     """
     Get expected collections this week.
@@ -2080,7 +2159,7 @@ def get_admin_expected_collections(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_due_payables(company=None):
     """
     Get payments due to suppliers.
@@ -2149,7 +2228,7 @@ def get_admin_due_payables(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_stock_movement(company=None):
     """
     Get stock movement summary - in vs out.
@@ -2234,7 +2313,7 @@ def get_admin_stock_movement(company=None):
     }
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def get_admin_distributor_performance(company=None):
     """
     Get distributor (Mini POS Profile) performance with targets.
