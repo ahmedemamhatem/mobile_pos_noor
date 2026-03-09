@@ -189,10 +189,15 @@ $(wrapper).html(`
                     <textarea id="pe-remarks" class="pe-input pe-textarea" rows="2"></textarea>
                 </div>
 
-                <!-- Submit -->
-                <button type="button" id="pe-submit" class="pe-submit-btn">
-                    <i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}
-                </button>
+                <!-- Submit Buttons -->
+                <div style="display:flex;gap:10px;">
+                    <button type="button" id="pe-save-submit" class="pe-submit-btn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 8px 25px rgba(16,185,129,0.3);">
+                        <i class="fa fa-check-circle"></i> حفظ واعتماد
+                    </button>
+                    <button type="button" id="pe-save-draft" class="pe-submit-btn" style="flex:1;background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 8px 25px rgba(245,158,11,0.3);">
+                        <i class="fa fa-save"></i> حفظ كمسودة
+                    </button>
+                </div>
                 <div id="pe-result"></div>
             </div>
         </div>
@@ -354,6 +359,28 @@ $(wrapper).html(`
 .pe-btn-close-detail:hover{background:linear-gradient(135deg,#cbd5e1,#94a3b8);color:#1e293b;}
 
 @media(max-width:500px){.pe-detail-info{grid-template-columns:1fr 1fr;}.pe-detail-banner{margin:10px 12px 0;padding:14px 16px;}.pe-detail-actions{padding:10px 12px 24px;}.pe-mode-flow{margin:0 12px;}}
+/* Ensure frappe confirm dialog appears above detail popup */
+.modal-backdrop{z-index:10000!important;}
+.modal{z-index:10001!important;}
+/* Custom confirm overlay */
+.pe-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:peConfirmIn 0.2s ease-out;}
+@keyframes peConfirmIn{0%{opacity:0}100%{opacity:1}}
+.pe-confirm-box{background:#fff;border-radius:22px;max-width:400px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;animation:peConfirmBoxIn 0.25s ease-out;}
+@keyframes peConfirmBoxIn{0%{opacity:0;transform:scale(0.9) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.pe-confirm-header{padding:28px 24px 16px;text-align:center;}
+.pe-confirm-header i{font-size:2.5em;width:64px;height:64px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;margin-bottom:12px;}
+.pe-confirm-header.warn i{color:#f59e0b;background:#fef3c7;}
+.pe-confirm-header.danger i{color:#ef4444;background:#fee2e2;}
+.pe-confirm-header.success i{color:#10b981;background:#dcfce7;}
+.pe-confirm-msg{text-align:center;padding:0 24px 24px;font-size:1.05em;font-weight:700;color:#1e293b;line-height:1.6;font-family:inherit;}
+.pe-confirm-actions{display:flex;gap:10px;padding:0 24px 24px;justify-content:center;}
+.pe-confirm-btn{flex:1;padding:14px 16px;border:none;border-radius:14px;font-family:inherit;font-size:1em;font-weight:700;cursor:pointer;transition:all 0.2s;}
+.pe-confirm-btn.cancel{background:#f1f5f9;color:#64748b;}
+.pe-confirm-btn.cancel:hover{background:#e2e8f0;color:#334155;}
+.pe-confirm-btn.ok{color:#fff;}
+.pe-confirm-btn.ok.danger{background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 4px 14px rgba(239,68,68,0.3);}
+.pe-confirm-btn.ok.success{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 4px 14px rgba(16,185,129,0.3);}
+.pe-confirm-btn.ok.warn{background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 14px rgba(245,158,11,0.3);}
 </style>
 `);
 
@@ -627,29 +654,55 @@ $(wrapper).on('blur', '#pe-amount', function() {
     $(this).val(val > 0 ? val.toFixed(2) : '');
 });
 
-// Submit
-$(wrapper).on('click', '#pe-submit', async function() {
-    let amount = parseFloat(convertArabicToEnglishNumbers($('#pe-amount').val())) || 0;
-    if (amount <= 0) return frappe.show_alert({ message: TEXT.REQUIRED_AMOUNT, indicator: 'red' }, 3);
+// Custom confirm dialog that appears above the detail popup
+function peConfirm(message, type) {
+    type = type || 'warn';
+    let iconMap = {warn:'fa-exclamation-triangle', danger:'fa-trash', success:'fa-check-circle'};
+    return new Promise(function(resolve) {
+        let overlay = $(`<div class="pe-confirm-overlay">
+            <div class="pe-confirm-box">
+                <div class="pe-confirm-header ${type}"><i class="fa ${iconMap[type] || iconMap.warn}"></i></div>
+                <div class="pe-confirm-msg">${message}</div>
+                <div class="pe-confirm-actions">
+                    <button type="button" class="pe-confirm-btn ok ${type}">نعم</button>
+                    <button type="button" class="pe-confirm-btn cancel">إلغاء</button>
+                </div>
+            </div>
+        </div>`);
+        $('body').append(overlay);
+        overlay.on('click', '.pe-confirm-btn.ok', function() { overlay.remove(); resolve(true); });
+        overlay.on('click', '.pe-confirm-btn.cancel', function() { overlay.remove(); resolve(false); });
+        overlay.on('click', function(e) { if ($(e.target).hasClass('pe-confirm-overlay')) { overlay.remove(); resolve(false); } });
+    });
+}
 
-    let $btn = $(this);
+// Shared validation and creation logic
+async function createPaymentEntry($btn, btnOrigHtml) {
+    let amount = parseFloat(convertArabicToEnglishNumbers($('#pe-amount').val())) || 0;
+    if (amount <= 0) {
+        frappe.show_alert({ message: TEXT.REQUIRED_AMOUNT, indicator: 'red' }, 3);
+        return null;
+    }
+
     $btn.prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i> ${TEXT.SUBMITTING}`);
 
     try {
         let r;
         if (selectedType === "Transfer") {
-            // Transfer mode validation
             if (!selectedFromMode) {
-                $btn.prop('disabled', false).html(`<i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}`);
-                return frappe.show_alert({ message: TEXT.REQUIRED_FROM_MODE, indicator: 'red' }, 3);
+                $btn.prop('disabled', false).html(btnOrigHtml);
+                frappe.show_alert({ message: TEXT.REQUIRED_FROM_MODE, indicator: 'red' }, 3);
+                return null;
             }
             if (!selectedToMode) {
-                $btn.prop('disabled', false).html(`<i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}`);
-                return frappe.show_alert({ message: TEXT.REQUIRED_TO_MODE, indicator: 'red' }, 3);
+                $btn.prop('disabled', false).html(btnOrigHtml);
+                frappe.show_alert({ message: TEXT.REQUIRED_TO_MODE, indicator: 'red' }, 3);
+                return null;
             }
             if (selectedFromMode === selectedToMode) {
-                $btn.prop('disabled', false).html(`<i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}`);
-                return frappe.show_alert({ message: TEXT.SAME_MODE_ERROR, indicator: 'red' }, 3);
+                $btn.prop('disabled', false).html(btnOrigHtml);
+                frappe.show_alert({ message: TEXT.SAME_MODE_ERROR, indicator: 'red' }, 3);
+                return null;
             }
 
             r = await frappe.call({
@@ -663,14 +716,15 @@ $(wrapper).on('click', '#pe-submit', async function() {
                 })}
             });
         } else {
-            // Receive/Pay mode validation
             if (!selectedParty) {
-                $btn.prop('disabled', false).html(`<i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}`);
-                return frappe.show_alert({ message: TEXT.REQUIRED_PARTY, indicator: 'red' }, 3);
+                $btn.prop('disabled', false).html(btnOrigHtml);
+                frappe.show_alert({ message: TEXT.REQUIRED_PARTY, indicator: 'red' }, 3);
+                return null;
             }
             if (!selectedMode) {
-                $btn.prop('disabled', false).html(`<i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}`);
-                return frappe.show_alert({ message: TEXT.REQUIRED_MODE, indicator: 'red' }, 3);
+                $btn.prop('disabled', false).html(btnOrigHtml);
+                frappe.show_alert({ message: TEXT.REQUIRED_MODE, indicator: 'red' }, 3);
+                return null;
             }
 
             r = await frappe.call({
@@ -683,37 +737,72 @@ $(wrapper).on('click', '#pe-submit', async function() {
                 })}
             });
         }
-
-        let doc = r.message;
-        frappe.show_alert({ message: TEXT.SUCCESS(doc.name), indicator: 'green' }, 3);
-        switchToTab('entries');
-        loadEntries();
-
-        // Auto-clear common fields
-        $('#pe-amount').val('');
-        $('#pe-remarks').val('');
-        $('#pe-result').empty();
-
-        if (selectedType === "Transfer") {
-            selectedFromMode = "";
-            selectedToMode = "";
-            $('#pe-from-mode-label').text(TEXT.SELECT_FROM_MODE);
-            $('#pe-from-mode-btn').removeClass('pe-selected');
-            $('#pe-to-mode-label').text(TEXT.SELECT_TO_MODE);
-            $('#pe-to-mode-btn').removeClass('pe-selected');
-        } else {
-            selectedParty = ""; selectedPartyLabel = "";
-            $('#pe-party-label').text(TEXT.SELECT_PARTY);
-            $('#pe-party-btn').removeClass('pe-selected');
-            selectedMode = "";
-            $('#pe-mode-label').text(TEXT.SELECT_MODE);
-            $('#pe-mode-btn').removeClass('pe-selected');
-        }
+        return r.message;
     } catch (err) {
         let msg = err.message || (err._server_messages && JSON.parse(err._server_messages)[0]) || TEXT.ERROR;
         $('#pe-result').html(`<div class="pe-error">${msg}</div>`);
+        $btn.prop('disabled', false).html(btnOrigHtml);
+        return null;
     }
-    $btn.prop('disabled', false).html(`<i class="fa fa-check-circle"></i> ${TEXT.SUBMIT}`);
+}
+
+function clearFormAfterSave() {
+    $('#pe-amount').val('');
+    $('#pe-remarks').val('');
+    $('#pe-result').empty();
+
+    if (selectedType === "Transfer") {
+        selectedFromMode = "";
+        selectedToMode = "";
+        $('#pe-from-mode-label').text(TEXT.SELECT_FROM_MODE);
+        $('#pe-from-mode-btn').removeClass('pe-selected');
+        $('#pe-to-mode-label').text(TEXT.SELECT_TO_MODE);
+        $('#pe-to-mode-btn').removeClass('pe-selected');
+    } else {
+        selectedParty = ""; selectedPartyLabel = "";
+        $('#pe-party-label').text(TEXT.SELECT_PARTY);
+        $('#pe-party-btn').removeClass('pe-selected');
+        selectedMode = "";
+        $('#pe-mode-label').text(TEXT.SELECT_MODE);
+        $('#pe-mode-btn').removeClass('pe-selected');
+    }
+}
+
+// Save & Submit button
+$(wrapper).on('click', '#pe-save-submit', async function() {
+    let $btn = $(this);
+    let origHtml = `<i class="fa fa-check-circle"></i> حفظ واعتماد`;
+
+    let doc = await createPaymentEntry($btn, origHtml);
+    if (!doc) return;
+
+    // Now submit the created draft
+    try {
+        await frappe.call({ method: API_BASE + ".submit_entry", args: { entry_name: doc.name } });
+        frappe.show_alert({ message: `تم إنشاء واعتماد السند ${doc.name} بنجاح!`, indicator: 'green' }, 3);
+    } catch (e) {
+        frappe.show_alert({ message: `تم حفظ السند ${doc.name} كمسودة. فشل الاعتماد: ${e.message || 'خطأ'}`, indicator: 'orange' }, 5);
+    }
+
+    switchToTab('entries');
+    loadEntries();
+    clearFormAfterSave();
+    $btn.prop('disabled', false).html(origHtml);
+});
+
+// Save as Draft button
+$(wrapper).on('click', '#pe-save-draft', async function() {
+    let $btn = $(this);
+    let origHtml = `<i class="fa fa-save"></i> حفظ كمسودة`;
+
+    let doc = await createPaymentEntry($btn, origHtml);
+    if (!doc) return;
+
+    frappe.show_alert({ message: TEXT.SUCCESS(doc.name), indicator: 'green' }, 3);
+    switchToTab('entries');
+    loadEntries();
+    clearFormAfterSave();
+    $btn.prop('disabled', false).html(origHtml);
 });
 
 // Home button
@@ -900,9 +989,7 @@ $(document).on('click', '#pe-btn-close-detail', closeDetailPopup);
 // Submit entry
 $(document).on('click', '#pe-btn-submit-entry', async function() {
     if (!currentDetailEntry) return;
-    const confirmed = await new Promise(resolve => {
-        frappe.confirm(TEXT.CONFIRM_SUBMIT, () => resolve(true), () => resolve(false));
-    });
+    let confirmed = await peConfirm(TEXT.CONFIRM_SUBMIT, 'success');
     if (!confirmed) return;
     let $btn = $(this);
     $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
@@ -912,7 +999,11 @@ $(document).on('click', '#pe-btn-submit-entry', async function() {
         closeDetailPopup();
         loadEntries();
     } catch (e) {
-        frappe.show_alert({ message: e.message || 'Error', indicator: 'red' }, 4);
+        let msg = e.message || 'Error';
+        if (e._server_messages) {
+            try { msg = JSON.parse(JSON.parse(e._server_messages)[0]).message; } catch(_) {}
+        }
+        frappe.show_alert({ message: msg, indicator: 'red' }, 4);
         $btn.prop('disabled', false).html(`<i class="fa fa-check"></i> ${TEXT.SUBMIT_ENTRY}`);
     }
 });
@@ -920,9 +1011,7 @@ $(document).on('click', '#pe-btn-submit-entry', async function() {
 // Cancel entry
 $(document).on('click', '#pe-btn-cancel-entry', async function() {
     if (!currentDetailEntry) return;
-    const confirmed = await new Promise(resolve => {
-        frappe.confirm(TEXT.CONFIRM_CANCEL, () => resolve(true), () => resolve(false));
-    });
+    let confirmed = await peConfirm(TEXT.CONFIRM_CANCEL, 'danger');
     if (!confirmed) return;
     let $btn = $(this);
     $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
@@ -932,7 +1021,11 @@ $(document).on('click', '#pe-btn-cancel-entry', async function() {
         closeDetailPopup();
         loadEntries();
     } catch (e) {
-        frappe.show_alert({ message: e.message || 'Error', indicator: 'red' }, 4);
+        let msg = e.message || 'Error';
+        if (e._server_messages) {
+            try { msg = JSON.parse(JSON.parse(e._server_messages)[0]).message; } catch(_) {}
+        }
+        frappe.show_alert({ message: msg, indicator: 'red' }, 4);
         $btn.prop('disabled', false).html(`<i class="fa fa-ban"></i> ${TEXT.CANCEL_ENTRY}`);
     }
 });
@@ -940,9 +1033,7 @@ $(document).on('click', '#pe-btn-cancel-entry', async function() {
 // Delete entry
 $(document).on('click', '#pe-btn-delete-entry', async function() {
     if (!currentDetailEntry) return;
-    const confirmed = await new Promise(resolve => {
-        frappe.confirm(TEXT.CONFIRM_DELETE, () => resolve(true), () => resolve(false));
-    });
+    let confirmed = await peConfirm(TEXT.CONFIRM_DELETE, 'danger');
     if (!confirmed) return;
     let $btn = $(this);
     $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
@@ -952,7 +1043,11 @@ $(document).on('click', '#pe-btn-delete-entry', async function() {
         closeDetailPopup();
         loadEntries();
     } catch (e) {
-        frappe.show_alert({ message: e.message || 'Error', indicator: 'red' }, 4);
+        let msg = e.message || 'Error';
+        if (e._server_messages) {
+            try { msg = JSON.parse(JSON.parse(e._server_messages)[0]).message; } catch(_) {}
+        }
+        frappe.show_alert({ message: msg, indicator: 'red' }, 4);
         $btn.prop('disabled', false).html(`<i class="fa fa-trash"></i> ${TEXT.DELETE_ENTRY}`);
     }
 });
