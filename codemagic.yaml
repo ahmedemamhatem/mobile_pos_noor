@@ -17,7 +17,7 @@ workflows:
     scripts:
       - name: Set up local properties
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/mobile_pos/public/android_app/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Build Release APK
         script: |
@@ -25,7 +25,7 @@ workflows:
           ./gradlew assembleRelease
 
     artifacts:
-      - mobile_pos/public/android_app/app/build/outputs/apk/**/*.apk
+      - app/build/outputs/apk/**/*.apk
 
     publishing:
       email:
@@ -51,7 +51,7 @@ workflows:
     scripts:
       - name: Set up local properties
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/mobile_pos/public/android_app/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Build Debug APK
         script: |
@@ -59,4 +59,4 @@ workflows:
           ./gradlew assembleDebug
 
     artifacts:
-      - mobile_pos/public/android_app/app/build/outputs/apk/**/*.apk
+      - app/build/outputs/apk/**/*.apk
