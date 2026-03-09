@@ -229,12 +229,14 @@ $(wrapper).html(`
 .price-row{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;background:#f8fafc;border-radius:10px;padding:10px 12px;border:1px solid #e2e8f0;transition:border-color 0.2s;}
 .price-row:hover{border-color:#f59e0b;}
 .price-row-list{font-weight:700;color:#334155;font-size:0.92em;}
-.price-row-controls{display:flex;align-items:center;gap:6px;}
-.price-row-input{flex:1;padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;font-family:inherit;text-align:center;font-weight:700;outline:none;background:#fff;transition:border-color 0.2s;min-width:0;}
+.price-row-controls{display:flex;flex-direction:column;gap:8px;}
+.price-row-inputs{display:flex;align-items:center;gap:6px;}
+.price-row-input{flex:1;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:1.15em;font-family:inherit;text-align:center;font-weight:700;outline:none;background:#fff;transition:border-color 0.2s;min-width:0;}
 .price-row-input:focus{border-color:#f59e0b;}
-.price-row-save{background:#10b981;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;font-size:0.82em;transition:all 0.2s;font-family:inherit;white-space:nowrap;}
+.price-row-actions{display:flex;align-items:center;gap:8px;}
+.price-row-save{flex:1;background:#10b981;color:#fff;border:none;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:0.88em;transition:all 0.2s;font-family:inherit;white-space:nowrap;}
 .price-row-save:hover{background:#059669;}
-.price-row-delete{background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;font-size:0.82em;transition:all 0.2s;font-family:inherit;}
+.price-row-delete{flex:1;background:#fee2e2;color:#ef4444;border:none;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:0.88em;transition:all 0.2s;font-family:inherit;}
 .price-row-delete:hover{background:#fecaca;color:#dc2626;}
 .price-empty{text-align:center;padding:20px;color:#94a3b8;font-size:0.9em;font-weight:600;background:#f8fafc;border-radius:10px;border:2px dashed #e2e8f0;}
 .price-add-row{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:12px;background:#fffbeb;border-radius:12px;border:2px dashed #f59e0b;}
@@ -912,13 +914,17 @@ function loadPricesForModal(modal, itemCode) {
                     html += `<div class="price-row">
                         <div class="price-row-list">${escapeHtml(p.price_list)}</div>
                         <div class="price-row-controls">
-                            <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
-                                <i class="fa fa-balance-scale"></i>
-                                <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
-                            </button>
-                            <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
-                            <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}">${TEXT.SAVE}</button>
-                            <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i></button>
+                            <div class="price-row-inputs">
+                                <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
+                                    <i class="fa fa-balance-scale"></i>
+                                    <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
+                                </button>
+                                <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
+                            </div>
+                            <div class="price-row-actions">
+                                <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}"><i class="fa fa-check"></i> ${TEXT.SAVE}</button>
+                                <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i> ${TEXT.DELETE_PRICE}</button>
+                            </div>
                         </div>
                     </div>`;
                 });
@@ -952,13 +958,17 @@ function loadPricesForModal(modal, itemCode) {
                     html += `<div class="price-row">
                         <div class="price-row-list">${escapeHtml(p.price_list)}</div>
                         <div class="price-row-controls">
-                            <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
-                                <i class="fa fa-balance-scale"></i>
-                                <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
-                            </button>
-                            <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
-                            <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}">${TEXT.SAVE}</button>
-                            <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i></button>
+                            <div class="price-row-inputs">
+                                <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
+                                    <i class="fa fa-balance-scale"></i>
+                                    <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
+                                </button>
+                                <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
+                            </div>
+                            <div class="price-row-actions">
+                                <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}"><i class="fa fa-check"></i> ${TEXT.SAVE}</button>
+                                <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i> ${TEXT.DELETE_PRICE}</button>
+                            </div>
                         </div>
                     </div>`;
                 });
