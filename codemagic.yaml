@@ -3,6 +3,7 @@ workflows:
     name: Android Release Build
     max_build_duration: 30
     instance_type: mac_mini_m2
+    working_directory: mobile_pos/public/android_app
     environment:
       java: 17
       android_signing:
@@ -22,7 +23,7 @@ workflows:
     scripts:
       - name: Set up local properties
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/mobile_pos/public/android_app/local.properties"
 
       - name: Build Release APK
         script: |
@@ -30,7 +31,7 @@ workflows:
           ./gradlew assembleRelease
 
     artifacts:
-      - app/build/outputs/apk/**/*.apk
+      - mobile_pos/public/android_app/app/build/outputs/apk/**/*.apk
 
     publishing:
       email:
@@ -44,6 +45,7 @@ workflows:
     name: Android Debug Build
     max_build_duration: 30
     instance_type: mac_mini_m2
+    working_directory: mobile_pos/public/android_app
     environment:
       java: 17
     triggering:
@@ -55,7 +57,7 @@ workflows:
     scripts:
       - name: Set up local properties
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/mobile_pos/public/android_app/local.properties"
 
       - name: Build Debug APK
         script: |
@@ -63,4 +65,4 @@ workflows:
           ./gradlew assembleDebug
 
     artifacts:
-      - app/build/outputs/apk/**/*.apk
+      - mobile_pos/public/android_app/app/build/outputs/apk/**/*.apk
