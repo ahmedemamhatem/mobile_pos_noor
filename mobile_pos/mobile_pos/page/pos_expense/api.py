@@ -34,7 +34,7 @@ def get_profile_or_throw():
                 break
 
     if not profile:
-        frappe.throw(_("No active Mini POS Profile found for your user."))
+        return None
 
     return frappe.get_doc("Mini POS Profile", profile.name)
 
@@ -43,6 +43,8 @@ def get_profile_or_throw():
 def get_context():
     """Get profile context: company, modes of payment, expense types."""
     profile = get_profile_or_throw()
+    if not profile:
+        return {"company": "", "modes": [], "expenses": [], "profile_name": ""}
     company = profile.company
 
     all_modes = frappe.get_all(
@@ -64,7 +66,7 @@ def get_context():
 
     expenses = frappe.get_all(
         "Expense",
-        filters={"company": company},
+        filters={"company": company, "active": 1, "show_in_app": 1},
         fields=["name", "expense_name", "expense_account"],
         order_by="expense_name asc",
         ignore_permissions=True
@@ -82,11 +84,17 @@ def get_context():
 def create_expense_entry(data):
     """Create an Expense Entry and auto-submit it (creates Journal Entry)."""
     profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("Please set up a Mini POS Profile before creating expense entries."))
     data = frappe._dict(json.loads(data) if isinstance(data, str) else data)
 
     expense = data.get("expense")
     if not expense:
         frappe.throw(_("Expense type is required."))
+
+    is_active = frappe.db.get_value("Expense", expense, "active")
+    if not is_active:
+        frappe.throw(_("Expense {0} is not active.").format(expense))
 
     mode_of_payment = data.get("mode_of_payment")
     if not mode_of_payment:
@@ -122,9 +130,11 @@ def create_expense_entry(data):
 
 
 @frappe.whitelist()
-def get_recent_entries(limit=20):
+def get_recent_entries(limit=50):
     """Get recent expense entries."""
     profile = get_profile_or_throw()
+    if not profile:
+        return []
 
     entries = frappe.get_all(
         "Expense Entry",
@@ -142,4 +152,53 @@ def get_recent_entries(limit=20):
         ignore_permissions=True
     )
 
+    # Fetch expense names
+    expense_names = list(set(e.expense for e in entries if e.expense))
+    expense_map = {}
+    if expense_names:
+        for exp in frappe.get_all("Expense", filters={"name": ["in", expense_names]}, fields=["name", "expense_name"], ignore_permissions=True):
+            expense_map[exp.name] = exp.expense_name
+
+    for e in entries:
+        e["expense_name"] = expense_map.get(e.expense, e.expense)
+
     return entries
+
+
+@frappe.whitelist()
+def submit_expense_entry(name):
+    """Submit a draft Expense Entry."""
+    if not name:
+        frappe.throw(_("Expense Entry name is required."))
+
+    doc = frappe.get_doc("Expense Entry", name)
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft entries can be submitted."))
+
+    doc.submit()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "docstatus": doc.docstatus,
+        "journal_entry": doc.journal_entry
+    }
+
+
+@frappe.whitelist()
+def cancel_expense_entry(name):
+    """Cancel a submitted Expense Entry."""
+    if not name:
+        frappe.throw(_("Expense Entry name is required."))
+
+    doc = frappe.get_doc("Expense Entry", name)
+    if doc.docstatus != 1:
+        frappe.throw(_("Only submitted entries can be cancelled."))
+
+    doc.cancel()
+    frappe.db.commit()
+
+    return {
+        "name": doc.name,
+        "docstatus": doc.docstatus
+    }

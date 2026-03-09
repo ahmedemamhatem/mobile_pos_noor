@@ -13,6 +13,12 @@ class ExpenseEntry(Document):
 		if not self.posting_date:
 			self.posting_date = nowdate()
 
+		# Check if expense is active
+		if self.expense:
+			is_active = frappe.db.get_value("Expense", self.expense, "active")
+			if not is_active:
+				frappe.throw(_("Expense {0} is not active.").format(frappe.bold(self.expense)))
+
 		# Fetch expense account if not set
 		if self.expense and not self.expense_account:
 			self.expense_account = frappe.db.get_value("Expense", self.expense, "expense_account")

@@ -1,0 +1,66 @@
+workflows:
+  android-release:
+    name: Android Release Build
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      java: 17
+      android_signing:
+        - elnoor_keystore
+      groups:
+        - android_credentials
+      vars:
+        PACKAGE_NAME: "com.elnoor.pos"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: master
+          include: true
+    scripts:
+      - name: Set up local properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+
+      - name: Build Release APK
+        script: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+    artifacts:
+      - app/build/outputs/apk/**/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - dev@elnoor.com
+        notify:
+          success: true
+          failure: true
+
+  android-debug:
+    name: Android Debug Build
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      java: 17
+    triggering:
+      events:
+        - pull_request
+      branch_patterns:
+        - pattern: "*"
+          include: true
+    scripts:
+      - name: Set up local properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+
+      - name: Build Debug APK
+        script: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+    artifacts:
+      - app/build/outputs/apk/**/*.apk

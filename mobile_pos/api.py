@@ -4,6 +4,14 @@ from typing import Dict, Any, Optional, List
 from frappe.utils import nowdate, flt, today, get_first_day, getdate
 
 
+def _is_pos_admin():
+    """Check if the current user is a POS Admin (pos_user_type == 'Admin')."""
+    user = frappe.session.user
+    if not user or user == "Guest":
+        return False
+    return frappe.db.get_value("User", user, "pos_user_type") == "Admin"
+
+
 def _resolve_company(company=None):
     """Resolve company: use provided value, or fall back to user's Mini POS Profile company."""
     if company:
@@ -2394,3 +2402,320 @@ def get_admin_distributor_performance(company=None):
     result.sort(key=lambda x: x["achievement"], reverse=True)
 
     return {"profiles": result, "count": len(result)}
+
+
+# ============================================================
+# Draft Invoices → Stock Entry API
+# ============================================================
+
+@frappe.whitelist()
+def get_mini_pos_profiles_list() -> Dict[str, Any]:
+    """Get list of all active Mini POS Profiles. Admin only."""
+    if not _is_pos_admin():
+        return {"success": False, "message": "غير مصرح لك بهذا الإجراء"}
+
+    profiles = frappe.get_all(
+        "Mini POS Profile",
+        filters={"disabled": 0},
+        fields=["name", "user", "company", "warehouse"],
+        order_by="name asc",
+        ignore_permissions=True
+    )
+
+    # Add full name for display
+    for p in profiles:
+        p["full_name"] = frappe.db.get_value("User", p.user, "full_name") or p.user
+
+    return {"success": True, "profiles": profiles}
+
+
+@frappe.whitelist()
+def get_draft_invoices_for_transfer(mini_pos_profile=None) -> Dict[str, Any]:
+    """Get all draft invoices for a Mini POS Profile and sum items.
+
+    Args:
+        mini_pos_profile: Optional. Admin users can pass any profile name.
+            Non-admin users always use their own profile (parameter ignored).
+
+    Returns items grouped by item_code with total quantities,
+    plus a list of the draft invoices included.
+    """
+    try:
+        from mobile_pos.mobile_pos.page.mini_pos.api import get_profile_or_throw
+
+        is_admin = _is_pos_admin()
+
+        # Admin can specify any profile; non-admin always uses own profile
+        if is_admin and mini_pos_profile:
+            profile = frappe.get_doc("Mini POS Profile", mini_pos_profile)
+        else:
+            try:
+                profile = get_profile_or_throw()
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"لم يتم العثور على ملف Mini POS للمستخدم الحالي: {str(e)}"
+                }
+
+        company = profile.company
+        warehouse = profile.warehouse
+        profile_name = profile.name
+
+        # Determine which profile field exists on Sales Invoice
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            profile_field = "si.mini_pos_profile"
+        else:
+            profile_field = "si.custom_mini_pos_profile"
+
+        # Get all draft invoices for this profile (docstatus=0, not returns)
+        invoices = frappe.db.sql("""
+            SELECT
+                si.name,
+                si.customer,
+                si.customer_name,
+                si.posting_date,
+                si.grand_total
+            FROM `tabSales Invoice` si
+            WHERE si.docstatus = 0
+              AND si.is_return = 0
+              AND si.company = %s
+              AND {profile_field} = %s
+            ORDER BY si.creation DESC
+        """.format(profile_field=profile_field), (company, profile_name), as_dict=True)
+
+        if not invoices:
+            return {
+                "success": False,
+                "message": "لا توجد فواتير مسودة لهذا الملف"
+            }
+
+        invoice_names = [inv.name for inv in invoices]
+
+        # Get items from all draft invoices, grouped by item_code
+        items_data = frappe.db.sql("""
+            SELECT
+                sii.item_code,
+                sii.item_name,
+                sii.stock_uom,
+                sii.uom,
+                SUM(sii.stock_qty) AS total_qty,
+                SUM(sii.qty) AS total_sales_qty
+            FROM `tabSales Invoice Item` sii
+            WHERE sii.parent IN %s
+            GROUP BY sii.item_code
+            ORDER BY sii.item_name ASC
+        """, (invoice_names,), as_dict=True)
+
+        # Get items grouped by customer
+        customers_data = []
+        customer_map = {}
+        for inv in invoices:
+            cust_id = inv.customer
+            if cust_id not in customer_map:
+                customer_map[cust_id] = {
+                    "customer_id": cust_id,
+                    "customer_name": inv.customer_name,
+                    "invoices": [],
+                    "items": []
+                }
+            customer_map[cust_id]["invoices"].append(inv.name)
+
+        # Fetch items per customer
+        for cust_id, cust_info in customer_map.items():
+            cust_items = frappe.db.sql("""
+                SELECT
+                    sii.item_code,
+                    sii.item_name,
+                    sii.uom,
+                    SUM(sii.qty) AS qty
+                FROM `tabSales Invoice Item` sii
+                INNER JOIN `tabSales Invoice` si ON si.name = sii.parent
+                WHERE sii.parent IN %s
+                  AND si.customer = %s
+                GROUP BY sii.item_code
+                ORDER BY sii.item_name ASC
+            """, (invoice_names, cust_id), as_dict=True)
+            cust_info["items"] = cust_items
+            customers_data.append(cust_info)
+
+        return {
+            "success": True,
+            "is_admin": is_admin,
+            "profile_name": profile_name,
+            "items": items_data,
+            "customers": customers_data,
+            "invoices": invoices,
+            "invoices_count": len(invoices),
+            "items_count": len(items_data),
+            "warehouse": warehouse,
+            "company": company
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Get Draft Invoices For Transfer Error")
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+
+@frappe.whitelist()
+def create_stock_entry_from_drafts(transfer_type="add", mini_pos_profile=None) -> Dict[str, Any]:
+    """Create a Stock Entry (Material Transfer) from draft invoices.
+
+    Args:
+        transfer_type:
+            - "add": Transfer from main warehouse → POS warehouse (تحميل)
+            - "return": Transfer from POS warehouse → main warehouse (إرجاع)
+        mini_pos_profile: Optional. Admin users can pass any profile name.
+            Non-admin users always use their own profile (parameter ignored).
+
+    Sums all items from draft invoices for the specified POS profile and creates
+    a single Stock Entry with the aggregated quantities.
+    """
+    # Read JSON POST body
+    if frappe.request and frappe.request.data:
+        try:
+            body = json.loads(frappe.request.data)
+            transfer_type = body.get("transfer_type", transfer_type)
+            mini_pos_profile = body.get("mini_pos_profile", mini_pos_profile)
+        except Exception:
+            pass
+
+    transfer_type = transfer_type or frappe.form_dict.get("transfer_type") or "add"
+
+    try:
+        from mobile_pos.mobile_pos.page.mini_pos.api import get_profile_or_throw
+
+        is_admin = _is_pos_admin()
+
+        # Admin can specify any profile; non-admin always uses own profile
+        if is_admin and mini_pos_profile:
+            profile = frappe.get_doc("Mini POS Profile", mini_pos_profile)
+        else:
+            try:
+                profile = get_profile_or_throw()
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"لم يتم العثور على ملف Mini POS للمستخدم الحالي: {str(e)}"
+                }
+
+        pos_warehouse = profile.warehouse
+        company = profile.company
+        profile_name = profile.name
+
+        # Get main warehouse from Mobile POS Settings
+        from mobile_pos.mobile_pos.doctype.mobile_pos_settings.mobile_pos_settings import get_mobile_pos_settings
+        settings = get_mobile_pos_settings(company)
+        main_warehouse = settings.main_warehouse
+
+        if not main_warehouse:
+            return {
+                "success": False,
+                "message": "الرجاء تحديد المستودع الرئيسي في إعدادات Mobile POS"
+            }
+
+        if main_warehouse == pos_warehouse:
+            return {
+                "success": False,
+                "message": "المستودع الرئيسي ومستودع نقاط البيع متطابقان"
+            }
+
+        # Determine source and target based on transfer_type
+        if transfer_type == "add":
+            source_warehouse = main_warehouse
+            target_warehouse = pos_warehouse
+            transfer_label = "تحميل"
+        else:
+            source_warehouse = pos_warehouse
+            target_warehouse = main_warehouse
+            transfer_label = "إرجاع"
+
+        # Determine profile field
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            profile_field = "si.mini_pos_profile"
+        else:
+            profile_field = "si.custom_mini_pos_profile"
+
+        # Get draft invoices
+        draft_invoices = frappe.db.sql("""
+            SELECT si.name
+            FROM `tabSales Invoice` si
+            WHERE si.docstatus = 0
+              AND si.is_return = 0
+              AND si.company = %s
+              AND {profile_field} = %s
+        """.format(profile_field=profile_field), (company, profile_name), as_dict=True)
+
+        if not draft_invoices:
+            return {
+                "success": False,
+                "message": "لا توجد فواتير مسودة لإنشاء حركة المخزون"
+            }
+
+        invoice_names = [inv.name for inv in draft_invoices]
+
+        # Get aggregated items
+        items_data = frappe.db.sql("""
+            SELECT
+                sii.item_code,
+                sii.item_name,
+                sii.stock_uom,
+                SUM(sii.stock_qty) AS total_qty
+            FROM `tabSales Invoice Item` sii
+            WHERE sii.parent IN %s
+            GROUP BY sii.item_code
+            ORDER BY sii.item_name ASC
+        """, (invoice_names,), as_dict=True)
+
+        if not items_data:
+            return {
+                "success": False,
+                "message": "لا توجد أصناف في الفواتير المسودة"
+            }
+
+        # Create Stock Entry as Draft
+        stock_entry = frappe.new_doc("Stock Entry")
+        stock_entry.stock_entry_type = "Material Transfer"
+        stock_entry.company = company
+        stock_entry.posting_date = nowdate()
+        stock_entry.set_posting_time = 1
+
+        # Set mini_pos_profile and transfer_type if fields exist
+        if frappe.get_meta("Stock Entry").has_field("mini_pos_profile"):
+            stock_entry.mini_pos_profile = profile_name
+        if frappe.get_meta("Stock Entry").has_field("transfer_type"):
+            stock_entry.transfer_type = transfer_label
+
+        for item in items_data:
+            stock_entry.append("items", {
+                "item_code": item.item_code,
+                "qty": item.total_qty,
+                "s_warehouse": source_warehouse,
+                "t_warehouse": target_warehouse,
+                "uom": item.stock_uom
+            })
+
+        stock_entry.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        return {
+            "success": True,
+            "message": f"تم إنشاء حركة المخزون ({transfer_label}): {stock_entry.name}",
+            "stock_entry": stock_entry.name,
+            "transfer_type": transfer_type,
+            "transfer_label": transfer_label,
+            "items_count": len(items_data),
+            "invoices_count": len(draft_invoices),
+            "source_warehouse": source_warehouse,
+            "target_warehouse": target_warehouse,
+            "items": [{"item_code": i.item_code, "item_name": i.item_name, "qty": i.total_qty, "uom": i.stock_uom} for i in items_data]
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Create Stock Entry From Drafts Error")
+        return {
+            "success": False,
+            "message": str(e)
+        }

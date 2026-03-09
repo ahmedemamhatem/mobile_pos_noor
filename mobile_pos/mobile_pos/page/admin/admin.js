@@ -16,23 +16,24 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
     $(wrapper).find('.layout-main-section').html(`
         <!-- Custom Admin Header -->
         <div class="admin-header">
-            <a href="/main" class="home-btn">
-                <i class="fa fa-home"></i>
-                <span>الرئيسية</span>
-            </a>
+            <div class="company-filter">
+                <label for="company-select">
+                    <i class="fa fa-building"></i>
+                    الشركة:
+                </label>
+                <select id="company-select" class="company-select">
+                    <option value="">جاري التحميل...</option>
+                </select>
+            </div>
+            <h1 class="admin-title"><i class="fa fa-cogs"></i> لوحة التحكم</h1>
             <div class="header-actions">
-                <div class="company-filter">
-                    <label for="company-select">
-                        <i class="fa fa-building"></i>
-                        الشركة:
-                    </label>
-                    <select id="company-select" class="company-select">
-                        <option value="">جاري التحميل...</option>
-                    </select>
-                </div>
-                <button class="header-btn" id="btn-refresh" title="تحديث">
+                <button class="header-btn header-btn-refresh" id="btn-refresh" title="تحديث">
                     <i class="fa fa-refresh"></i>
                 </button>
+                <a href="/main" class="home-btn">
+                    <i class="fa fa-home"></i>
+                    <span>الرئيسية</span>
+                </a>
             </div>
         </div>
 

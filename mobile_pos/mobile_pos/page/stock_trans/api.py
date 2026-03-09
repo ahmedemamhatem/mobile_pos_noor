@@ -24,7 +24,7 @@ def get_profile_or_throw():
     user = frappe.session.user
     profile_name = frappe.db.get_value("Mini POS Profile", {"user": user}, "name")
     if not profile_name:
-        frappe.throw(_("No POS Profile configured for this user ({0})").format(user), frappe.PermissionError)
+        return None
     return frappe.get_doc("Mini POS Profile", profile_name)
 
 
@@ -74,6 +74,8 @@ def coerce_items(items):
 @frappe.whitelist()
 def get_context():
     profile = get_profile_or_throw()
+    if not profile:
+        return {"warehouse": "", "warehouses": [], "company": "", "allow_negative_stock": False}
     # Get allow_negative_stock - checks both Company and Mobile POS Settings
     allow_negative_stock = is_negative_stock_allowed_for_company(profile.company)
     return {
@@ -92,11 +94,9 @@ def get_items(warehouse, company=None):
 
     # If no company passed, resolve from current user's profile
     if not company:
-        try:
-            profile = get_profile_or_throw()
+        profile = get_profile_or_throw()
+        if profile:
             company = profile.company
-        except Exception:
-            pass
 
     # Check if negative stock is allowed - checks both Company and Mobile POS Settings
     allow_negative_stock = is_negative_stock_allowed_for_company(company)
@@ -192,6 +192,8 @@ def get_item_details(item_code, warehouse):
 @frappe.whitelist()
 def create_transfer(direction, counterpart_warehouse, items):
     profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("Please set up a Mini POS Profile before creating transfers."))
     pos_warehouse = profile.warehouse
     direction = (direction or "").lower()
     if direction not in ("in", "out"):

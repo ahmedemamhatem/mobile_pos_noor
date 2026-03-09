@@ -5,6 +5,21 @@ from frappe import _
 from datetime import timedelta
 
 
+def _is_pos_admin():
+    """Check if the current user is a POS Admin (pos_user_type == 'Admin')."""
+    user = frappe.session.user
+    if not user or user == "Guest":
+        return False
+    return frappe.db.get_value("User", user, "pos_user_type") == "Admin"
+
+
+def _get_customer_profile(customer):
+    """Get the mini_pos_profile assigned to a customer."""
+    if not customer:
+        return None
+    return frappe.db.get_value("Customer", customer, "custom_mini_pos_profile")
+
+
 def is_negative_stock_allowed_for_company(company):
     """
     Check if negative stock is allowed for mobile POS.
@@ -56,7 +71,6 @@ def mini_pos_stock_transfer(txn_type, main_warehouse, pos_warehouse, items):
             "t_warehouse": pos_warehouse if txn_type == "Add Stock" else main_warehouse
         })
     doc.insert()
-    doc.submit()
     return doc.name
 
 
@@ -420,12 +434,13 @@ def mini_pos_get_item_details(item_code, customer=None):
 @frappe.whitelist()
 def mini_pos_ledger(customer):
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     company = profile.company
 
     # Build profile filter for GL Entry if mini_pos_profile dimension exists
     gl_profile_filter = ""
     gl_params = [customer, company]
-    if frappe.get_meta("GL Entry").has_field("mini_pos_profile"):
+    if not is_admin and frappe.get_meta("GL Entry").has_field("mini_pos_profile"):
         gl_profile_filter = "AND mini_pos_profile=%s"
         gl_params.append(profile.name)
 
@@ -479,9 +494,19 @@ def mini_pos_get_customer_balance(customer):
 
 @frappe.whitelist()
 def mini_pos_get_all_customers_credit():
-    """Get all customers with their outstanding balances for the current POS profile"""
+    """Get all customers with their outstanding balances for the current POS profile.
+    Admin users see all customers across all profiles.
+    """
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     company = profile.company
+
+    if is_admin:
+        credit_profile_filter = ""
+        params = (company,)
+    else:
+        credit_profile_filter = "AND c.custom_mini_pos_profile = %s"
+        params = (company, profile.name)
 
     results = frappe.db.sql("""
         SELECT
@@ -493,11 +518,11 @@ def mini_pos_get_all_customers_credit():
         WHERE gl.party_type = 'Customer'
           AND gl.company = %s
           AND gl.docstatus = 1
-          AND c.custom_mini_pos_profile = %s
+          {credit_profile_filter}
         GROUP BY gl.party, c.customer_name
         HAVING balance != 0
         ORDER BY c.customer_name
-    """, (company, profile.name), as_dict=1)
+    """.format(credit_profile_filter=credit_profile_filter), params, as_dict=1)
 
     return results
 
@@ -627,8 +652,12 @@ def _generate_custom_hash():
     return f"{random_5digit}-{date_str}-{time_str}"
 
 
-def _create_payment_entry(profile, customer, company, mode_of_payment, total_payment, custom_hash):
+def _create_payment_entry(profile, customer, company, mode_of_payment, total_payment, custom_hash, profile_name_override=None):
     """Create and submit a Payment Entry for the given amount.
+
+    Args:
+        profile_name_override: If provided, use this profile name instead of profile.name
+            (used when admin creates payment for a customer with a different profile).
 
     Returns the Payment Entry name, or None if no payment was created.
     """
@@ -666,11 +695,11 @@ def _create_payment_entry(profile, customer, company, mode_of_payment, total_pay
         "reference_date": frappe.utils.nowdate(),
         "mode_of_payment": mode_of_payment,
         "custom_hash": custom_hash,
-        "custom_mini_pos_profile": profile.name,
+        "custom_mini_pos_profile": profile_name_override or profile.name,
         "references": []
     }
     if frappe.get_meta("Payment Entry").has_field("mini_pos_profile"):
-        pe_dict["mini_pos_profile"] = profile.name
+        pe_dict["mini_pos_profile"] = profile_name_override or profile.name
     pe = frappe.get_doc(pe_dict)
     pe.insert(ignore_permissions=True)
     pe.submit()
@@ -680,6 +709,7 @@ def _create_payment_entry(profile, customer, company, mode_of_payment, total_pay
 @frappe.whitelist(allow_guest=False)
 def mini_pos_create_invoice(data):
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     data = frappe._dict(json.loads(data) if isinstance(data, str) else data)
     items = data.get("items", [])
     customer = data.get("customer")
@@ -695,9 +725,25 @@ def mini_pos_create_invoice(data):
     if not customer or not items:
         frappe.throw("Customer and items are required.")
 
+    # For admin: resolve the invoice profile from the customer's custom_mini_pos_profile
+    if is_admin:
+        customer_profile_name = _get_customer_profile(customer)
+        if customer_profile_name:
+            invoice_profile_name = customer_profile_name
+            # Load the customer's profile to get warehouse and company
+            customer_profile = frappe.get_doc("Mini POS Profile", customer_profile_name)
+            invoice_warehouse = customer_profile.warehouse
+        else:
+            # Customer has no profile assigned, use admin's own profile
+            invoice_profile_name = profile.name
+            invoice_warehouse = profile.warehouse
+    else:
+        invoice_profile_name = profile.name
+        invoice_warehouse = profile.warehouse
+
     # Check for duplicate invoice (same customer, same items/qty within 3 hours)
     if not is_return:
-        duplicate_invoice = check_duplicate_invoice(customer, items, company=profile.company, profile_name=profile.name)
+        duplicate_invoice = check_duplicate_invoice(customer, items, company=profile.company, profile_name=invoice_profile_name)
         if duplicate_invoice:
             return {
                 "duplicate": True,
@@ -727,7 +773,7 @@ def mini_pos_create_invoice(data):
             "item_code": item_code,
             "qty": qty,
             "rate": rate,
-            "warehouse": profile.warehouse,
+            "warehouse": invoice_warehouse,
             "uom": uom,
             "conversion_factor": conversion_factor
         })
@@ -753,7 +799,8 @@ def mini_pos_create_invoice(data):
 
     if not save_as_draft:
         payment_entry_name = _create_payment_entry(
-            profile, customer, company, mode_of_payment, total_payment, custom_hash
+            profile, customer, company, mode_of_payment, total_payment, custom_hash,
+            profile_name_override=invoice_profile_name if is_admin else None
         )
 
     # --- STEP 2: Create Invoice ---
@@ -766,11 +813,11 @@ def mini_pos_create_invoice(data):
         "disable_rounded_total": 1,
         "items": invoice_items,
         "custom_hash": custom_hash,
-        "custom_mini_pos_profile": profile.name
+        "custom_mini_pos_profile": invoice_profile_name
     }
     # Set mini_pos_profile if field exists
     if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        doc_dict["mini_pos_profile"] = profile.name
+        doc_dict["mini_pos_profile"] = invoice_profile_name
     if discount_amount:
         doc_dict["discount_amount"] = discount_amount
         doc_dict["apply_discount_on"] = apply_discount_on
@@ -819,8 +866,11 @@ def mini_pos_create_invoice(data):
 
 @frappe.whitelist()
 def mini_pos_get_draft_invoices(customer=None):
-    """Get all draft invoices for the current user's POS profile."""
+    """Get all draft invoices for the current user's POS profile.
+    Admin users see all draft invoices across all profiles.
+    """
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     company = profile.company
 
     filters = {
@@ -829,11 +879,12 @@ def mini_pos_get_draft_invoices(customer=None):
         "is_return": 0
     }
 
-    # Filter by profile using whichever field exists
-    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        filters["mini_pos_profile"] = profile.name
-    else:
-        filters["custom_mini_pos_profile"] = profile.name
+    # Admin sees all drafts; non-admin filtered by own profile
+    if not is_admin:
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            filters["mini_pos_profile"] = profile.name
+        else:
+            filters["custom_mini_pos_profile"] = profile.name
 
     if customer:
         filters["customer"] = customer
@@ -1009,10 +1060,18 @@ def mini_pos_submit_draft_invoice(invoice_name, data=None):
     if not doc.get("custom_hash"):
         doc.db_set("custom_hash", custom_hash, update_modified=False)
 
-    # Create Payment Entry
+    # Create Payment Entry - use the invoice's profile (may differ from admin's profile)
+    invoice_profile = doc.get("mini_pos_profile") or doc.get("custom_mini_pos_profile")
+    pe_profile_override = invoice_profile if (_is_pos_admin() and invoice_profile) else None
     payment_entry_name = _create_payment_entry(
-        profile, customer, company, mode_of_payment, total_payment, custom_hash
+        profile, customer, company, mode_of_payment, total_payment, custom_hash,
+        profile_name_override=pe_profile_override
     )
+
+    # Update due_date to now to avoid "due date before posting date" error
+    # (draft may have been created days ago with an older due_date)
+    doc.due_date = frappe.utils.nowdate()
+    doc.save(ignore_permissions=True)
 
     # Submit the invoice
     doc.submit()
@@ -1088,6 +1147,13 @@ def mini_pos_make_payment(customer, amount, mode_of_payment, invoice=None, payme
         paid_from_account = mop_account
         paid_to_account = receivable_account
 
+    # Admin uses customer's profile; non-admin uses own profile
+    is_admin = _is_pos_admin()
+    if is_admin:
+        pe_profile = _get_customer_profile(customer) or profile.name
+    else:
+        pe_profile = profile.name
+
     pe_dict = {
         "doctype": "Payment Entry",
         "payment_type": payment_type,
@@ -1101,7 +1167,7 @@ def mini_pos_make_payment(customer, amount, mode_of_payment, invoice=None, payme
         "reference_no": frappe.generate_hash(length=8),
         "reference_date": frappe.utils.nowdate(),
         "mode_of_payment": mode_of_payment,
-        "custom_mini_pos_profile": profile.name,
+        "custom_mini_pos_profile": pe_profile,
         "references": []
     }
 
@@ -1111,7 +1177,7 @@ def mini_pos_make_payment(customer, amount, mode_of_payment, invoice=None, payme
 
     # Set mini_pos_profile if field exists
     if frappe.get_meta("Payment Entry").has_field("mini_pos_profile"):
-        pe_dict["mini_pos_profile"] = profile.name
+        pe_dict["mini_pos_profile"] = pe_profile
     if invoice:
         pe_dict["references"] = [{
             "reference_doctype": "Sales Invoice",
@@ -1127,6 +1193,7 @@ def mini_pos_make_payment(customer, amount, mode_of_payment, invoice=None, payme
 @frappe.whitelist()
 def mini_pos_get_returns(return_against, items):
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     if isinstance(items, str):
         items = json.loads(items)
 
@@ -1135,6 +1202,19 @@ def mini_pos_get_returns(return_against, items):
     # Validate that the return_against invoice belongs to the same company
     if doc.company != profile.company:
         frappe.throw(_("Return invoice does not belong to your company."), frappe.PermissionError)
+
+    # For admin: use the original invoice's profile and warehouse
+    if is_admin:
+        orig_profile_name = doc.get("mini_pos_profile") or doc.get("custom_mini_pos_profile") or profile.name
+        try:
+            orig_profile_doc = frappe.get_doc("Mini POS Profile", orig_profile_name)
+            return_warehouse = orig_profile_doc.warehouse
+        except Exception:
+            return_warehouse = profile.warehouse
+        return_profile_name = orig_profile_name
+    else:
+        return_warehouse = profile.warehouse
+        return_profile_name = profile.name
 
     # Get discount from original invoice (negate it for return since items are negative)
     original_discount = doc.discount_amount or 0
@@ -1159,7 +1239,7 @@ def mini_pos_get_returns(return_against, items):
             "item_code": item_code,
             "qty": item["qty"],
             "rate": item.get("rate"),
-            "warehouse": profile.warehouse,
+            "warehouse": return_warehouse,
             "uom": uom,
             "conversion_factor": conversion_factor
         })
@@ -1184,7 +1264,7 @@ def mini_pos_get_returns(return_against, items):
         "update_stock": 1,
         "disable_rounded_total": 1,
         "custom_hash": custom_hash,
-        "custom_mini_pos_profile": profile.name,
+        "custom_mini_pos_profile": return_profile_name,
         "discount_amount": return_discount,
         # Copy taxes (structure, as list of dicts)
         "taxes": [row.as_dict() for row in doc.taxes] if doc.taxes else []
@@ -1196,7 +1276,7 @@ def mini_pos_get_returns(return_against, items):
             return_doc_dict["additional_discount_account"] = doc.additional_discount_account
     # Set mini_pos_profile if field exists
     if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        return_doc_dict["mini_pos_profile"] = profile.name
+        return_doc_dict["mini_pos_profile"] = return_profile_name
     return_doc = frappe.get_doc(return_doc_dict)
     return_doc.insert()
     return_doc.submit()
@@ -1214,6 +1294,7 @@ def mini_pos_create_direct_return(customer, items):
     """
     Create a direct return invoice without requiring an original invoice.
     Items should have negative quantities.
+    Admin users: the invoice profile is resolved from the customer's custom_mini_pos_profile.
 
     Args:
         customer: Customer name
@@ -1223,6 +1304,7 @@ def mini_pos_create_direct_return(customer, items):
         dict with return invoice name and custom_hash
     """
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     if isinstance(items, str):
         items = json.loads(items)
 
@@ -1231,6 +1313,19 @@ def mini_pos_create_direct_return(customer, items):
 
     if not items:
         frappe.throw(_("At least one item is required"))
+
+    # For admin: resolve the invoice profile from the customer
+    if is_admin:
+        customer_profile_name = _get_customer_profile(customer)
+        if customer_profile_name:
+            invoice_profile_name = customer_profile_name
+            invoice_warehouse = frappe.db.get_value("Mini POS Profile", customer_profile_name, "warehouse")
+        else:
+            invoice_profile_name = profile.name
+            invoice_warehouse = profile.warehouse
+    else:
+        invoice_profile_name = profile.name
+        invoice_warehouse = profile.warehouse
 
     return_items = []
     for item in items:
@@ -1254,7 +1349,7 @@ def mini_pos_create_direct_return(customer, items):
             "item_code": item_code,
             "qty": qty,
             "rate": flt(item.get("rate", 0)),
-            "warehouse": profile.warehouse,
+            "warehouse": invoice_warehouse,
             "uom": uom,
             "conversion_factor": conversion_factor
         })
@@ -1278,12 +1373,12 @@ def mini_pos_create_direct_return(customer, items):
         "update_stock": 1,
         "disable_rounded_total": 1,
         "custom_hash": custom_hash,
-        "custom_mini_pos_profile": profile.name,
+        "custom_mini_pos_profile": invoice_profile_name,
     }
 
     # Set mini_pos_profile if field exists
     if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        return_doc_dict["mini_pos_profile"] = profile.name
+        return_doc_dict["mini_pos_profile"] = invoice_profile_name
 
     return_doc = frappe.get_doc(return_doc_dict)
     return_doc.insert()
@@ -1378,11 +1473,22 @@ def mini_pos_create_customer(customer_name, customer_type="Individual", territor
 
 @frappe.whitelist()
 def mini_pos_get_customers():
-    """Get list of customers for the POS filtered by current user's POS profile"""
+    """Get list of customers for the POS filtered by current user's POS profile.
+    Admin users see all customers across all profiles.
+    """
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
+
+    filters = {}
+    if is_admin:
+        # Admin sees all customers that have any mini_pos_profile assigned
+        filters['custom_mini_pos_profile'] = ['is', 'set']
+    else:
+        filters['custom_mini_pos_profile'] = profile.name
+
     customers = frappe.get_list('Customer',
         fields=['name', 'customer_name', 'custom_mini_pos_profile'],
-        filters={'custom_mini_pos_profile': profile.name},
+        filters=filters,
         limit_page_length=1000,
         order_by='name'
     )
@@ -1432,9 +1538,11 @@ def mini_pos_cancel_invoice(invoice_name):
         if invoice.company != profile.company:
             frappe.throw(_("You don't have access to this invoice"))
 
-        invoice_profile = invoice.get("mini_pos_profile") or invoice.get("custom_mini_pos_profile")
-        if invoice_profile and invoice_profile != profile.name:
-            frappe.throw(_("You don't have access to this invoice"))
+        is_admin = _is_pos_admin()
+        if not is_admin:
+            invoice_profile = invoice.get("mini_pos_profile") or invoice.get("custom_mini_pos_profile")
+            if invoice_profile and invoice_profile != profile.name:
+                frappe.throw(_("You don't have access to this invoice"))
 
         # Check if already cancelled
         if invoice.docstatus == 2:
@@ -1480,11 +1588,14 @@ def mini_pos_cancel_invoice(invoice_name):
 
 @frappe.whitelist()
 def mini_pos_get_customer_invoices(customer):
-    """Get list of submitted invoices for a customer (excluding return invoices)"""
+    """Get list of submitted invoices for a customer (excluding return invoices).
+    Admin users see all invoices regardless of profile.
+    """
     if not customer:
         frappe.throw(_("Customer is required."))
 
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     company = profile.company
 
     filters = {
@@ -1494,11 +1605,12 @@ def mini_pos_get_customer_invoices(customer):
         "is_return": 0  # Exclude return invoices
     }
 
-    # Filter by mini_pos_profile
-    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        filters["mini_pos_profile"] = profile.name
-    else:
-        filters["custom_mini_pos_profile"] = profile.name
+    # Admin sees all; non-admin filtered by profile
+    if not is_admin:
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            filters["mini_pos_profile"] = profile.name
+        else:
+            filters["custom_mini_pos_profile"] = profile.name
 
     invoices = frappe.get_all(
         "Sales Invoice",
@@ -1554,18 +1666,26 @@ def create_expense_entry(expense, amount, remark, mode_of_payment, pos_profile=N
 
 @frappe.whitelist()
 def mini_pos_customer_invoices(customer):
-    """Get list of invoices for a customer with basic info."""
+    """Get list of invoices for a customer with basic info.
+    Admin users see all invoices regardless of profile.
+    """
     if not customer:
         frappe.throw("Customer is required.")
 
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     company = profile.company
 
-    # Build profile filter
-    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        profile_filter = "AND si.mini_pos_profile = %s"
+    # Build profile filter - admin sees all
+    if is_admin:
+        profile_filter = ""
+        params = (customer, company)
     else:
-        profile_filter = "AND si.custom_mini_pos_profile = %s"
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            profile_filter = "AND si.mini_pos_profile = %s"
+        else:
+            profile_filter = "AND si.custom_mini_pos_profile = %s"
+        params = (customer, company, profile.name)
 
     invoices = frappe.db.sql("""
         SELECT
@@ -1585,24 +1705,32 @@ def mini_pos_customer_invoices(customer):
           {profile_filter}
         ORDER BY si.posting_date DESC, si.posting_time DESC
         LIMIT 50
-    """.format(profile_filter=profile_filter), (customer, company, profile.name), as_dict=1)
+    """.format(profile_filter=profile_filter), params, as_dict=1)
 
     return invoices
 
 @frappe.whitelist()
 def mini_pos_invoice_details(invoice_name):
-    """Get full invoice details including items for reprinting."""
+    """Get full invoice details including items for reprinting.
+    Admin users can access any invoice regardless of profile.
+    """
     if not invoice_name:
         frappe.throw("Invoice name is required.")
 
     profile = get_profile_or_throw()
+    is_admin = _is_pos_admin()
     company = profile.company
 
-    # Build profile filter
-    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
-        inv_profile_filter = "AND si.mini_pos_profile = %s"
+    # Build profile filter - admin sees all
+    if is_admin:
+        inv_profile_filter = ""
+        params = (invoice_name, company)
     else:
-        inv_profile_filter = "AND si.custom_mini_pos_profile = %s"
+        if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+            inv_profile_filter = "AND si.mini_pos_profile = %s"
+        else:
+            inv_profile_filter = "AND si.custom_mini_pos_profile = %s"
+        params = (invoice_name, company, profile.name)
 
     # Get invoice header
     invoice = frappe.db.sql("""
@@ -1628,7 +1756,7 @@ def mini_pos_invoice_details(invoice_name):
           AND si.company = %s
           AND si.docstatus = 1
           {inv_profile_filter}
-    """.format(inv_profile_filter=inv_profile_filter), (invoice_name, company, profile.name), as_dict=1)
+    """.format(inv_profile_filter=inv_profile_filter), params, as_dict=1)
 
     if not invoice:
         frappe.throw("Invoice not found.")
@@ -1737,12 +1865,18 @@ def mini_pos_create_customer_discount(customer, discount_type, amount, remarks=N
     # Create Journal Entry
     # Debit: Discount Account (expense)
     # Credit: Customer Receivable Account (reduces customer balance)
+    # Admin uses customer's profile
+    if _is_pos_admin():
+        je_profile = _get_customer_profile(customer) or profile.name
+    else:
+        je_profile = profile.name
+
     je = frappe.new_doc("Journal Entry")
     je.voucher_type = "Journal Entry"
     je.company = company
     je.posting_date = frappe.utils.nowdate()
     je.user_remark = remarks or _("Customer Discount - {0}").format(discount_doc.discount_type_name)
-    je.custom_mini_pos_profile = profile.name
+    je.custom_mini_pos_profile = je_profile
     je.custom_discount_type = discount_type
 
     # Debit row - Discount expense account
@@ -1751,7 +1885,7 @@ def mini_pos_create_customer_discount(customer, discount_type, amount, remarks=N
         "debit_in_account_currency": amount,
         "credit_in_account_currency": 0,
         "cost_center": cost_center,
-        "mini_pos_profile": profile.name
+        "mini_pos_profile": je_profile
     })
 
     # Credit row - Customer receivable account
@@ -1762,7 +1896,7 @@ def mini_pos_create_customer_discount(customer, discount_type, amount, remarks=N
         "debit_in_account_currency": 0,
         "credit_in_account_currency": amount,
         "cost_center": cost_center,
-        "mini_pos_profile": profile.name
+        "mini_pos_profile": je_profile
     })
 
     je.insert(ignore_permissions=True)
@@ -1790,8 +1924,12 @@ def mini_pos_get_customer_sold_items(customer, search_term=None):
     if search_term:
         search_condition = "AND (sii.item_name LIKE %(search)s OR sii.item_code LIKE %(search)s)"
 
-    # Build profile filter
-    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+    # Build profile filter - admin sees all, non-admin filtered by own profile
+    is_admin = _is_pos_admin()
+    if is_admin:
+        sold_profile_filter = ""
+        sold_profile_filter2 = ""
+    elif frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
         sold_profile_filter = "AND si.mini_pos_profile = %(profile)s"
         sold_profile_filter2 = "AND si2.mini_pos_profile = %(profile)s"
     else:

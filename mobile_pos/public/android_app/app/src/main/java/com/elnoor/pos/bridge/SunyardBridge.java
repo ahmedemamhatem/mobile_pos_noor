@@ -131,6 +131,7 @@ public class SunyardBridge {
             double paidAmount = data.optDouble("paid_amount", 0);
             double changeAmount = data.optDouble("change_amount", 0);
             double customerBalance = data.optDouble("customer_balance", 0);
+            double balanceBefore = data.optDouble("balance_before", 0);
             boolean isReturn = data.optBoolean("is_return", false);
             JSONArray items = data.optJSONArray("items");
             JSONArray taxes = data.optJSONArray("taxes");
@@ -294,12 +295,20 @@ public class SunyardBridge {
 
             printer.addText(centerBundle, "--------------------------------");
 
-            // ===== CUSTOMER BALANCE =====
-            if (customerBalance != 0) {
-                String balanceLabel = customerBalance > 0 ? "رصيد العميل (مدين)" : "رصيد العميل (دائن)";
-                printRTLRow(printer, balanceLabel, formatCurrency(Math.abs(customerBalance)));
-                printer.addText(centerBundle, "--------------------------------");
-            }
+            // ===== CUSTOMER BALANCE TABLE =====
+            printer.addText(centerBundle, "رصيد العميل");
+            printer.addText(centerBundle, "================================");
+
+            // Row 1: Balance before invoice
+            printRTLRow(printer, "الرصيد قبل الفاتورة", formatCurrency(balanceBefore));
+            // Row 2: Invoice total
+            printRTLRow(printer, "إجمالي الفاتورة", formatCurrency(grandTotal));
+            // Row 3: Paid amount
+            printRTLRow(printer, "المدفوع في الفاتورة", formatCurrency(paidAmount));
+            printer.addText(centerBundle, "--------------------------------");
+            // Row 4: Balance after invoice (large bold)
+            printer.addText(largeRightBundle, formatCurrency(customerBalance) + " :الرصيد بعد الفاتورة");
+            printer.addText(centerBundle, "================================");
 
             // ===== FOOTER =====
             printer.addText(centerBundle, "شكراً لتعاملكم معنا");

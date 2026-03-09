@@ -751,6 +751,33 @@ border-color:var(--primary);
   box-shadow:0 25px 60px rgba(239,68,68,0.4), 0 10px 25px rgba(239,68,68,0.25), 0 0 40px rgba(239,68,68,0.2);
 }
 
+.act-purchase{
+  background:linear-gradient(135deg,#0891b2 0%,#0e7490 50%,#155e75 100%);
+  border:1px solid rgba(8,145,178,0.4);
+}
+
+.act-purchase:hover{
+  box-shadow:0 25px 60px rgba(8,145,178,0.4), 0 10px 25px rgba(8,145,178,0.25), 0 0 40px rgba(8,145,178,0.2);
+}
+
+.act-transfers{
+  background:linear-gradient(135deg,#667eea 0%,#764ba2 50%,#6d28d9 100%);
+  border:1px solid rgba(102,126,234,0.4);
+}
+
+.act-transfers:hover{
+  box-shadow:0 25px 60px rgba(102,126,234,0.4), 0 10px 25px rgba(118,75,162,0.25), 0 0 40px rgba(102,126,234,0.2);
+}
+
+.act-items{
+  background:linear-gradient(135deg,#f97316 0%,#ea580c 50%,#c2410c 100%);
+  border:1px solid rgba(249,115,22,0.4);
+}
+
+.act-items:hover{
+  box-shadow:0 25px 60px rgba(249,115,22,0.4), 0 10px 25px rgba(249,115,22,0.25), 0 0 40px rgba(249,115,22,0.2);
+}
+
 .disabled .action{
   filter:grayscale(.85) opacity(.65);
   pointer-events:none;
@@ -1643,6 +1670,20 @@ input:focus,button:focus{
         <i class="fa fa-chevron-left"></i>
       </div>
     </a>
+    <a id="link-transfers" class="action act-transfers hidden" href="/app/transfer-entries">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-exchange" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">حركات المخزون</h3>
+          <p class="action-desc">عرض واعتماد حركات التحويل</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
     <a id="link-admin" class="action act-admin hidden" href="/app/admin">
       <div class="action-content">
         <div class="action-icon-wrapper">
@@ -1663,8 +1704,8 @@ input:focus,button:focus{
           <i class="fa fa-money" style="font-size:28px;color:white;"></i>
         </div>
         <div class="action-text">
-          <h3 class="action-title">سند قبض / صرف</h3>
-          <p class="action-desc">إنشاء سندات القبض والصرف</p>
+          <h3 class="action-title">قبض / صرف / تحويل</h3>
+          <p class="action-desc">سندات القبض والصرف والتحويل بين طرق الدفع</p>
         </div>
       </div>
       <div class="action-arrow">
@@ -1679,6 +1720,34 @@ input:focus,button:focus{
         <div class="action-text">
           <h3 class="action-title">سند مصروفات</h3>
           <p class="action-desc">تسجيل المصروفات اليومية</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
+    <a id="link-purchase" class="action act-purchase hidden" href="/app/pos-purchase">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-shopping-bag" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">فاتورة مشتريات</h3>
+          <p class="action-desc">إنشاء فاتورة مشتريات</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
+    <a id="link-items" class="action act-items hidden" href="/app/items">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-cubes" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">إدارة الأصناف</h3>
+          <p class="action-desc">عرض وإضافة وتعديل الأصناف والأسعار</p>
         </div>
       </div>
       <div class="action-arrow">
@@ -1838,6 +1907,9 @@ const mainSystemBtn=$("main-system-btn");
 const linkAdmin=$("link-admin");
 const linkPayment=$("link-payment");
 const linkExpense=$("link-expense");
+const linkPurchase=$("link-purchase");
+const linkItems=$("link-items");
+const linkTransfers=$("link-transfers");
 const userInfoGrid=$("user-info-grid");
 
 // PWA Install functionality
@@ -2102,13 +2174,26 @@ if (isAdmin) {
   // Show admin link
   linkAdmin.classList.remove("hidden");
 
-  // Show payment and expense links for admin
+  // Show payment, expense, purchase, items, and transfers links for admin
   if (linkPayment) linkPayment.classList.remove("hidden");
   if (linkExpense) linkExpense.classList.remove("hidden");
+  if (linkPurchase) linkPurchase.classList.remove("hidden");
+  if (linkItems) linkItems.classList.remove("hidden");
+  if (linkTransfers) linkTransfers.classList.remove("hidden");
 
-  // Hide all other actions (POS, Stock)
-  if (linkPos) linkPos.classList.add("hidden");
+  // Show POS for admin, hide Stock
+  if (linkPos) linkPos.classList.remove("hidden");
   if (linkTruck) linkTruck.classList.add("hidden");
+
+  // Reorder: Admin first, then POS, then Transfers, then Payment, then Expense, then Purchase
+  if (linkAdmin && linkAdmin.parentNode) {
+    let container = linkAdmin.parentNode;
+    if (linkPos) container.insertBefore(linkAdmin, linkPos);
+    if (linkTransfers) container.insertBefore(linkPos, linkTransfers);
+    if (linkPayment) container.insertBefore(linkTransfers, linkPayment);
+    if (linkExpense) container.insertBefore(linkPayment, linkExpense);
+    if (linkPurchase) container.insertBefore(linkExpense, linkPurchase);
+  }
 
   // Hide main system button for admin
   mainSystemBtn.classList.add("hidden");
@@ -2125,19 +2210,23 @@ if (isAdmin) {
 } else if (isSystemUser) {
   console.log("System User - showing System button");
 
-  // Hide admin, payment, expense links
+  // Hide admin, payment, expense, items links
   linkAdmin.classList.add("hidden");
   if (linkPayment) linkPayment.classList.add("hidden");
   if (linkExpense) linkExpense.classList.add("hidden");
+  if (linkItems) linkItems.classList.add("hidden");
+  if (linkTransfers) linkTransfers.classList.add("hidden");
 
   // Show main system button
   mainSystemBtn.classList.remove("hidden");
 
   // Show POS and Stock if has profile
   if (hasProfile) {
-    console.log("System User with profile - showing POS and Stock");
+    console.log("System User with profile - showing POS, Stock, Items and Transfers");
     if (linkPos) linkPos.classList.remove("hidden");
     if (linkTruck) linkTruck.classList.remove("hidden");
+    if (linkItems) linkItems.classList.remove("hidden");
+    if (linkTransfers) linkTransfers.classList.remove("hidden");
     actions.classList.remove("hidden");
     actions.classList.remove("blurred");
     disableActions(false);
@@ -2157,16 +2246,20 @@ if (isAdmin) {
 } else if (isWebsiteUser) {
   console.log("Website User");
 
-  // Hide admin, payment, expense links and system button
+  // Hide admin, payment, expense, items links and system button
   linkAdmin.classList.add("hidden");
   if (linkPayment) linkPayment.classList.add("hidden");
   if (linkExpense) linkExpense.classList.add("hidden");
+  if (linkItems) linkItems.classList.add("hidden");
+  if (linkTransfers) linkTransfers.classList.add("hidden");
   mainSystemBtn.classList.add("hidden");
 
   if (hasProfile) {
-    console.log("Website User with profile - showing POS and Stock");
+    console.log("Website User with profile - showing POS, Stock, Items and Transfers");
     if (linkPos) linkPos.classList.remove("hidden");
     if (linkTruck) linkTruck.classList.remove("hidden");
+    if (linkItems) linkItems.classList.remove("hidden");
+    if (linkTransfers) linkTransfers.classList.remove("hidden");
     actions.classList.remove("hidden");
     actions.classList.remove("blurred");
     disableActions(false);
@@ -2185,6 +2278,8 @@ if (isAdmin) {
   linkAdmin.classList.add("hidden");
   if (linkPayment) linkPayment.classList.add("hidden");
   if (linkExpense) linkExpense.classList.add("hidden");
+  if (linkItems) linkItems.classList.add("hidden");
+  if (linkTransfers) linkTransfers.classList.add("hidden");
   mainSystemBtn.classList.add("hidden");
   actions.classList.add("hidden");
   show(contactAdminSection);

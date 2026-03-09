@@ -1,12 +1,3 @@
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
-      // SW registered!
-    }, function(err) {
-      console.error('SW registration failed: ', err);
-    });
-  });
-}
 frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
     // Hide default Frappe navbar for this page and restore on leave
 (function hideNavbarForMiniPOS() {
@@ -256,26 +247,7 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
         CREDIT_NO_DATA: "لا توجد أرصدة للعملاء.",
         CREDIT_FETCH_ERROR: "تعذر جلب أرصدة العملاء.",
         CUSTOMER_BALANCE: "رصيد العميل",
-        BALANCE_AFTER_INVOICE: "الرصيد بعد الفاتورة",
-        SAVE_DRAFT: "حفظ كمسودة",
-        DRAFT_INVOICES: "المسودات",
-        DRAFT_INVOICES_TITLE: "فواتير مسودة",
-        NO_DRAFT_INVOICES: "لا توجد فواتير مسودة.",
-        DRAFT_SAVED: name => `تم حفظ المسودة ${name} بنجاح!`,
-        DRAFT_SUBMITTED: name => `تم اعتماد الفاتورة ${name} بنجاح!`,
-        DRAFT_DELETED: name => `تم حذف المسودة ${name}.`,
-        DRAFT_SUBMIT: "اعتماد الفاتورة",
-        DRAFT_EDIT: "تعديل",
-        DRAFT_DELETE: "حذف",
-        DRAFT_DELETE_CONFIRM: "هل تريد حذف هذه المسودة؟",
-        SAVING_DRAFT: "جارٍ حفظ المسودة...",
-        DRAFT_OR_SUBMIT_TITLE: "حفظ الفاتورة",
-        DRAFT_OR_SUBMIT_MSG: "هل تريد حفظ كمسودة أو حفظ واعتماد؟",
-        SUBMIT_AND_PRINT: "حفظ واعتماد",
-        DRAFT_LOADED: name => `تم تحميل المسودة ${name} للتعديل.`,
-        LOADING_DRAFT: "جارٍ تحميل المسودة...",
-        SELECT_CUSTOMER_FOR_DRAFTS: "يرجى اختيار العميل أولاً لعرض المسودات.",
-        DRAFT_LOAD: "تحميل"
+        BALANCE_AFTER_INVOICE: "الرصيد بعد الفاتورة"
     };
 
     // Custom confirmation dialog with large buttons (same style as refresh)
@@ -360,7 +332,7 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
                     type: 'ledger',
                     title: title || '',
                     customer_name: company || '',  // company param is actually customer name in ledger context
-                    company_name: company_print_name || 'Elnoor-النور',
+                    company_name: company_print_name || 'Elsaeed-السعيد',
                     company_phone: company_phone || '',
                     columns: columns.map(c => ({
                         label: c.label || c.fieldname,
@@ -415,8 +387,6 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
             </head>
             <body>
                 <div class="print-header">
-                    <img src="/assets/mobile_pos/icons/web-app-manifest-192x192.png" alt="Elnoor-النور" style="width:60px;height:60px;border-radius:12px;margin-bottom:8px;">
-                    <div class="print-company">${typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور'}</div>
                     <div class="print-title">${title || ''}</div>
                     <div class="print-company">${company || ''}</div>
                 </div>
@@ -875,7 +845,7 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
     }
 
     // Print receipt function with Android native support
-    function printPOSReceipt(invoice_name, customer_name, items, total, discount, grand_total, paid_amount, payment_mode, custom_hash, is_return, customer_balance) {
+    function printPOSReceipt(invoice_name, customer_name, items, total, discount, grand_total, paid_amount, payment_mode, custom_hash, is_return, customer_balance, balance_before) {
         let now = new Date();
         let dateStr = now.toLocaleDateString('ar-EG');
         let timeStr = now.toLocaleTimeString('ar-EG');
@@ -908,7 +878,8 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
                     custom_hash: custom_hash || '',
                     is_return: isReturnInvoice,
                     customer_balance: balanceAfterInvoice,
-                    company_name: company_print_name || 'Elnoor-النور',
+                    balance_before: (balance_before || 0),
+                    company_name: company_print_name || 'Elsaeed-السعيد',
                     company_phone: company_phone || '',
                     date: dateStr,
                     time: timeStr
@@ -988,10 +959,27 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
                     margin-top: 10px;
                     padding-top: 8px;
                     font-weight: bold;
+                    font-size: 12px;
+                }
+                .balance-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-weight: bold;
+                    font-size: 11px;
+                }
+                .balance-table td {
+                    padding: 4px 5px;
+                    border: 1px solid #000;
+                }
+                .balance-table .label-col {
+                    text-align: right;
+                }
+                .balance-table .value-col {
+                    text-align: center;
+                }
+                .balance-table .total-row {
                     font-size: 13px;
-                    background: #f3f4f6;
-                    padding: 8px;
-                    border-radius: 4px;
+                    border-top: 2px solid #000;
                 }
                 .footer {
                     text-align: center;
@@ -1021,10 +1009,6 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
         </head>
         <body>
             <div class="header center">
-                <img src="/assets/mobile_pos/icons/web-app-manifest-192x192.png" alt="Elnoor-النور" style="width:60px;height:60px;border-radius:12px;margin-bottom:5px;">
-                <div class="bold" style="font-size: 14px;">${typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور'}</div>
-                ${typeof company_phone !== 'undefined' && company_phone ? '<div style="font-size:11px;">' + company_phone + '</div>' : ''}
-                <div style="border-top:1px dashed #000;margin:5px 0;"></div>
                 <div class="bold" style="font-size: 16px;">${isReturnInvoice ? 'فاتورة مرتجع' : 'فاتورة بيع'}</div>
                 <div class="invoice-number">${escape_html(invoice_name)}</div>
                 ${isReturnInvoice ? '<div class="return-badge">مرتجع</div>' : ''}
@@ -1087,10 +1071,24 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
             </div>
 
             <div class="customer-balance">
-                <div class="total-row">
-                    <span>رصيد العميل بعد الفاتورة:</span>
-                    <span style="color: ${balanceAfterInvoice > 0 ? '#dc2626' : '#16a34a'};">${format_currency_text(balanceAfterInvoice)}</span>
-                </div>
+                <table class="balance-table">
+                    <tr>
+                        <td class="label-col">الرصيد قبل الفاتورة</td>
+                        <td class="value-col">${format_currency_text(balance_before || 0)}</td>
+                    </tr>
+                    <tr>
+                        <td class="label-col">إجمالي الفاتورة</td>
+                        <td class="value-col">${format_currency_text(grand_total)}</td>
+                    </tr>
+                    <tr>
+                        <td class="label-col">المدفوع في الفاتورة</td>
+                        <td class="value-col">${format_currency_text(paid_amount)}</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td class="label-col">الرصيد بعد الفاتورة</td>
+                        <td class="value-col" style="color: ${balanceAfterInvoice > 0 ? '#dc2626' : '#16a34a'};">${format_currency_text(balanceAfterInvoice)}</td>
+                    </tr>
+                </table>
             </div>
 
             <div class="footer">
@@ -1187,7 +1185,7 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
     items.forEach(item => { item_lookup[item.value] = item; });
     item_groups = Array.from(new Set(items.map(i => i.item_group).filter(Boolean))).sort();
 
-    let profile, modes = [], allow_edit_price = 0, allow_add_customer = 1, allow_draft_invoices = 0, warehouse = "";
+    let profile, modes = [], allow_edit_price = 0, allow_add_customer = 1, warehouse = "";
     let sales_taxes_template = null;
     let taxes_table = [];
     let mode_options = [];
@@ -1202,10 +1200,9 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
         profile = (profileRes && profileRes.message) || profileRes || {};
         allow_edit_price = toInt(profile.allow_to_edit_item_price);
         allow_add_customer = toInt(profile.allow_to_add_customer);
-        allow_draft_invoices = toInt(profile.allow_draft_invoices);
         warehouse = profile.warehouse || "";
         allow_negative_stock = profile.allow_negative_stock || false;
-        company_print_name = profile.company_print_name || "Elnoor-النور";
+        company_print_name = profile.company_print_name || "Elsaeed-السعيد";
         company_phone = profile.company_phone || "";
         modes = (profile.mini_pos_mode_of_payment || []).map(r => r.mode_of_payment).filter(Boolean);
         modes = Array.from(new Set(modes));
@@ -1254,7 +1251,6 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
     }
 
     let pos_items = [], last_invoice = null, last_invoice_data = null, return_mode = false;
-    let editing_draft = null; // holds the draft invoice name when editing a loaded draft
     let discount_amount = 0;
     let paid_amount = 0;
     let paid_amount_manual = false;
@@ -2599,6 +2595,7 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
     #mini-pos-stock-txn-btn   { background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); }
     #mini-pos-balance-btn     { background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); }
     #mini-pos-expenses-btn    { background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); }
+    #mini-pos-total-revenue-btn { background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); }
     .mini-pos-act-btn[disabled], #mini-pos-payment-btn:disabled, #mini-pos-return-btn:disabled, #mini-pos-ledger-btn:disabled, #mini-pos-cancel-invoice-btn:disabled, #mini-pos-invoice-history-btn:disabled {
         filter: grayscale(1) brightness(1.12) opacity(0.65);
         cursor: not-allowed;
@@ -3693,10 +3690,10 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
                     <i class="fa fa-credit-card" style="margin-left:6px;"></i>
                     <span class="mini-pos-act-btn-label">${TEXT.TOTAL_USER_CREDIT}</span>
                 </button>
-                ${allow_draft_invoices ? `<button type="button" id="mini-pos-drafts-btn" class="mini-pos-act-btn" title="${TEXT.DRAFT_INVOICES}">
-                    <i class="fa fa-file-o" style="margin-left:6px;"></i>
-                    <span class="mini-pos-act-btn-label">${TEXT.DRAFT_INVOICES}</span>
-                </button>` : ''}
+                <button type="button" id="mini-pos-total-revenue-btn" class="mini-pos-act-btn" title="إجمالي الإيرادات">
+                    <i class="fa fa-line-chart" style="margin-left:6px;"></i>
+                    <span class="mini-pos-act-btn-label">إجمالي الإيرادات</span>
+                </button>
 
             </div>
         </div>
@@ -3821,7 +3818,7 @@ frappe.pages['mini-pos'].on_page_load = async function(wrapper) {
         renderTotal();
     });
 
-    // Paid amount field - same pattern as discount field (renderTotal only on blur)
+    // Paid amount field - same pattern as qty/rate in item dialog
     $(wrapper).on('input', '#mini-pos-paid', function() {
         let $this = $(this);
         let cursorPos = this.selectionStart;
@@ -5197,6 +5194,9 @@ $(wrapper).on("click", "#mini-pos-return-btn", async function () {
                         });
                         let customer_balance = balance_res.message || 0;
 
+                        // Balance before return = balance after + return total (return reduced balance)
+                        let balance_before_return = customer_balance + Math.abs(total);
+
                         // Print return receipt
                         printPOSReceipt(
                             r.message.name,
@@ -5214,7 +5214,8 @@ $(wrapper).on("click", "#mini-pos-return-btn", async function () {
                             '',
                             r.message.custom_hash,
                             true, // is return
-                            customer_balance
+                            customer_balance,
+                            balance_before_return
                         );
 
                         location.reload();
@@ -5736,7 +5737,8 @@ async function showInvoiceDetails(invoiceName, customerLabel) {
                     paymentMode,
                     invoice.custom_hash,
                     invoice.is_return,
-                    invoice.customer_balance
+                    invoice.customer_balance,
+                    invoice.balance_before || 0
                 );
             }
         });
@@ -6282,7 +6284,7 @@ function printStockTransferReceipt(result, deliveryDate) {
         try {
             let textContent = '';
             textContent += '================================\n';
-            textContent += (typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور') + '\n';
+            textContent += (typeof company_print_name !== 'undefined' ? company_print_name : 'Elsaeed-السعيد') + '\n';
             if (typeof company_phone !== 'undefined' && company_phone) { textContent += company_phone + '\n'; }
             textContent += '================================\n';
             textContent += 'إيصال تحميل بضاعة\n';
@@ -6354,8 +6356,6 @@ function printStockTransferReceipt(result, deliveryDate) {
 </head>
 <body>
     <div class="header">
-        <img src="/assets/mobile_pos/icons/web-app-manifest-192x192.png" alt="Elnoor-النور" style="width:60px;height:60px;border-radius:12px;margin-bottom:5px;">
-        <div style="font-size:14px;font-weight:bold;">${typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور'}</div>
         <h2>إيصال تحميل بضاعة</h2>
         <span class="success-badge">مسودة</span>
         <p><strong>${result.stock_entry}</strong></p>
@@ -6401,7 +6401,7 @@ function printStockTransferReceipt(result, deliveryDate) {
 }
 
 // Show print option dialog after invoice creation
-function showInvoicePrintOption(doc, customer_label, items, calc, paid_amount, payment_type, customer_balance) {
+function showInvoicePrintOption(doc, customer_label, items, calc, paid_amount, payment_type, customer_balance, balance_before) {
     const d = new frappe.ui.Dialog({
         title: '<span style="color: #10b981"><i class="fa fa-check-circle"></i> تم إنشاء الفاتورة</span>',
         fields: [{
@@ -6423,7 +6423,8 @@ function showInvoicePrintOption(doc, customer_label, items, calc, paid_amount, p
                 payment_type,
                 doc.custom_hash,
                 false,
-                customer_balance
+                customer_balance,
+                balance_before
             );
             // Clear and start new invoice
             setTimeout(() => location.reload(), 500);
@@ -6435,8 +6436,9 @@ function showInvoicePrintOption(doc, customer_label, items, calc, paid_amount, p
         }
     });
 
-    // Format balance color
-    const balanceColor = (customer_balance || 0) > 0 ? '#dc2626' : '#16a34a';
+    // Format balance colors
+    const balanceBeforeColor = (balance_before || 0) > 0 ? '#dc2626' : '#16a34a';
+    const balanceAfterColor = (customer_balance || 0) > 0 ? '#dc2626' : '#16a34a';
 
     d.fields_dict.invoice_content.$wrapper.html(`
         <div style="text-align: center; padding: 20px;">
@@ -6445,10 +6447,25 @@ function showInvoicePrintOption(doc, customer_label, items, calc, paid_amount, p
             <p style="font-size: 1.2em; color: #10b981; font-weight: 700; margin-bottom: 15px;">${doc.name}</p>
             <div style="background: #f0fdf4; border-radius: 12px; padding: 15px; text-align: right; margin-bottom: 15px;">
                 <p style="margin: 8px 0; color: #166534;"><strong>العميل:</strong> ${customer_label}</p>
-                <p style="margin: 8px 0; color: #166534;"><strong>الإجمالي:</strong> ${format_number(calc.grand_total)}</p>
-                <p style="margin: 8px 0; color: #166534;"><strong>المدفوع:</strong> ${format_number(paid_amount)}</p>
-                <p style="margin: 8px 0; color: ${balanceColor};"><strong>رصيد العميل:</strong> ${format_number(customer_balance || 0)}</p>
             </div>
+            <table style="width: 100%; border-collapse: collapse; font-weight: 700; font-size: 1.05em; direction: rtl; margin-bottom: 15px;">
+                <tr style="background: #f1f5f9;">
+                    <td style="padding: 10px 12px; border: 1px solid #cbd5e1; text-align: right;">الرصيد قبل الفاتورة</td>
+                    <td style="padding: 10px 12px; border: 1px solid #cbd5e1; text-align: center; color: ${balanceBeforeColor};">${format_number(balance_before || 0)}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px 12px; border: 1px solid #cbd5e1; text-align: right;">إجمالي الفاتورة</td>
+                    <td style="padding: 10px 12px; border: 1px solid #cbd5e1; text-align: center; color: #1e293b;">${format_number(calc.grand_total)}</td>
+                </tr>
+                <tr style="background: #f1f5f9;">
+                    <td style="padding: 10px 12px; border: 1px solid #cbd5e1; text-align: right;">المدفوع في الفاتورة</td>
+                    <td style="padding: 10px 12px; border: 1px solid #cbd5e1; text-align: center; color: #16a34a;">${format_number(paid_amount)}</td>
+                </tr>
+                <tr style="background: ${(customer_balance || 0) > 0 ? '#fef2f2' : '#f0fdf4'};">
+                    <td style="padding: 10px 12px; border: 2px solid #334155; text-align: right; font-size: 1.1em;">الرصيد بعد الفاتورة</td>
+                    <td style="padding: 10px 12px; border: 2px solid #334155; text-align: center; color: ${balanceAfterColor}; font-size: 1.1em;">${format_number(customer_balance || 0)}</td>
+                </tr>
+            </table>
             <p style="color: #64748b; font-size: 1em;">هل تريد طباعة الفاتورة؟</p>
         </div>
     `);
@@ -6537,7 +6554,8 @@ function showDuplicateInvoiceDialog(duplicate_invoice_data, message, customer_la
                         '',
                         inv.custom_hash,
                         inv.is_return,
-                        inv.customer_balance || 0
+                        inv.customer_balance || 0,
+                        inv.balance_before || 0
                     );
                 }
             } catch (err) {
@@ -6703,7 +6721,7 @@ function printCustomerOrders(deliveryDate) {
         try {
             let textContent = '';
             textContent += '================================\n';
-            textContent += (typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور') + '\n';
+            textContent += (typeof company_print_name !== 'undefined' ? company_print_name : 'Elsaeed-السعيد') + '\n';
             if (typeof company_phone !== 'undefined' && company_phone) { textContent += company_phone + '\n'; }
             textContent += '================================\n';
             textContent += 'طلبات العملاء\n';
@@ -6824,8 +6842,6 @@ function printCustomerOrders(deliveryDate) {
 </head>
 <body>
   <div class="header">
-    <img src="/assets/mobile_pos/icons/web-app-manifest-192x192.png" alt="Elnoor-النور" style="width:60px;height:60px;border-radius:12px;margin-bottom:5px;">
-    <div style="font-size:14px;font-weight:bold;">${typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور'}</div>
     <h2>طلبات العملاء</h2>
     <p>تاريخ التسليم: ${deliveryDate}</p>
     <p>التاريخ: ${new Date().toLocaleDateString('ar-SA')}</p>
@@ -6861,6 +6877,132 @@ $(wrapper).on('click', '#mini-pos-expenses-btn', function() {
     openExpensesDialog();
 });
 
+// --- Total Revenue Button ---
+$(wrapper).on('click', '#mini-pos-total-revenue-btn', function() {
+    showRevenuePasswordPrompt();
+});
+
+function showRevenuePasswordPrompt() {
+    let pwd = new frappe.ui.Dialog({
+        title: '<i class="fa fa-lock"></i> إجمالي الإيرادات',
+        fields: [
+            {
+                fieldtype: 'HTML',
+                fieldname: 'pwd_html',
+                options: `
+                    <div style="text-align:center; padding:15px 10px 5px; direction:rtl;">
+                        <i class="fa fa-shield" style="font-size:3em; color:#0d9488; margin-bottom:10px; display:block;"></i>
+                        <div style="font-size:1.1em; font-weight:700; color:#1e293b; margin-bottom:4px;">أدخل رمز المرور</div>
+                        <div style="font-size:0.9em; color:#64748b;">للوصول إلى تقرير الإيرادات</div>
+                    </div>
+                    <div style="margin:15px auto 10px; max-width:100%; padding:0 20px;">
+                        <div style="position:relative; width:100%;">
+                            <input type="password" id="rv-pin-input" inputmode="numeric" pattern="[0-9]*"
+                                maxlength="10" autocomplete="off" placeholder="••••"
+                                style="width:100%; padding:14px 48px 14px 48px; border:2px solid #d1d5db; border-radius:12px;
+                                font-size:28px; font-weight:800; text-align:center; letter-spacing:10px;
+                                color:#1e293b; background:#f8fafc; direction:ltr; outline:none; transition:border-color 0.2s;"
+                            >
+                            <button type="button" id="rv-pin-toggle" style="
+                                position:absolute; left:10px; top:0; bottom:0; margin:auto 0;
+                                height:40px; width:40px; display:flex; align-items:center; justify-content:center;
+                                background:none; border:none; cursor:pointer; color:#94a3b8; font-size:20px;
+                                border-radius:8px; transition:color 0.2s;">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                        </div>
+                        <div id="rv-pin-error" style="display:none; color:#ef4444; font-size:13px; font-weight:600; margin-top:8px; text-align:center;"></div>
+                    </div>
+                `
+            }
+        ],
+        primary_action_label: '<i class="fa fa-unlock"></i> تأكيد',
+        primary_action: function() {
+            let enteredPwd = pwd.$wrapper.find('#rv-pin-input').val().trim();
+            if (!enteredPwd) {
+                pwd.$wrapper.find('#rv-pin-error').text('يرجى إدخال رمز المرور').show();
+                return;
+            }
+            if (!/^\d+$/.test(enteredPwd)) {
+                pwd.$wrapper.find('#rv-pin-error').text('رمز المرور يجب أن يكون أرقام فقط').show();
+                pwd.$wrapper.find('#rv-pin-input').val('').focus();
+                return;
+            }
+            pwd.$wrapper.find('#rv-pin-error').hide();
+            pwd.get_primary_btn().prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> جاري التحقق...');
+
+            frappe.call({
+                method: 'mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_verify_revenue_password',
+                args: { password: enteredPwd },
+                callback: function(r) {
+                    if (r.message && r.message.valid) {
+                        pwd.hide();
+                        openTotalRevenueDialog(enteredPwd);
+                    }
+                },
+                error: function() {
+                    pwd.get_primary_btn().prop('disabled', false).html('<i class="fa fa-unlock"></i> تأكيد');
+                    pwd.$wrapper.find('#rv-pin-error').text('رمز المرور غير صحيح').show();
+                    pwd.$wrapper.find('#rv-pin-input').val('').focus();
+                }
+            });
+        }
+    });
+    pwd.show();
+
+    // Input focus/blur border color
+    pwd.$wrapper.on('focus', '#rv-pin-input', function() {
+        this.style.borderColor = '#0d9488';
+    }).on('blur', '#rv-pin-input', function() {
+        this.style.borderColor = '#d1d5db';
+    });
+
+    // Toggle button hover color
+    pwd.$wrapper.on('mouseenter', '#rv-pin-toggle', function() {
+        this.style.color = '#0d9488';
+    }).on('mouseleave', '#rv-pin-toggle', function() {
+        this.style.color = '#94a3b8';
+    });
+
+    // Toggle show/hide password
+    pwd.$wrapper.on('click', '#rv-pin-toggle', function() {
+        let $input = pwd.$wrapper.find('#rv-pin-input');
+        let $icon = $(this).find('i');
+        if ($input.attr('type') === 'password') {
+            $input.attr('type', 'text');
+            $icon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            $input.attr('type', 'password');
+            $icon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+        $input.focus();
+    });
+
+    // Accept Arabic/Eastern numerals and convert to English, allow only digits
+    pwd.$wrapper.on('input', '#rv-pin-input', function() {
+        // Convert Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩) to Western (0123456789)
+        this.value = this.value.replace(/[٠-٩]/g, function(d) {
+            return d.charCodeAt(0) - 0x0660;
+        });
+        // Convert Extended Arabic-Indic numerals (۰۱۲۳۴۵۶۷۸۹) to Western
+        this.value = this.value.replace(/[۰-۹]/g, function(d) {
+            return d.charCodeAt(0) - 0x06F0;
+        });
+        // Remove any remaining non-digit characters
+        this.value = this.value.replace(/[^0-9]/g, '');
+        pwd.$wrapper.find('#rv-pin-error').hide();
+    });
+
+    // Submit on Enter
+    pwd.$wrapper.on('keydown', '#rv-pin-input', function(e) {
+        if (e.key === 'Enter') {
+            pwd.get_primary_btn().trigger('click');
+        }
+    });
+
+    setTimeout(() => pwd.$wrapper.find('#rv-pin-input').focus(), 200);
+}
+
 async function openExpensesDialog() {
     // Fetch expense types first
     let expenseTypes = [];
@@ -6869,7 +7011,7 @@ async function openExpensesDialog() {
             method: "frappe.client.get_list",
             args: {
                 doctype: "Expense",
-                filters: { company: profile.company },
+                filters: { company: profile.company, hide_from_pos: 0, enabled: 1 },
                 fields: ["name", "expense_name"],
                 limit_page_length: 0
             }
@@ -7365,6 +7507,295 @@ function showExpenseSuccessPopup(docName, expenseType, amount) {
     }, 3000);
 }
 
+// --- Total Revenue Dialog ---
+function openTotalRevenueDialog(verifiedPassword) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    const monthNames = [
+        'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+        'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+
+    // Build year dropdown items
+    let yearItems = '';
+    for (let y = currentYear; y >= currentYear - 4; y--) {
+        yearItems += `<div class="rv-dd-item rv-year-item${y === currentYear ? ' selected' : ''}" data-value="${y}">
+            <span>${y}</span>
+            <i class="fa fa-check rv-dd-check"></i>
+        </div>`;
+    }
+
+    // Build month dropdown items
+    let monthItems = '';
+    for (let m = 1; m <= 12; m++) {
+        monthItems += `<div class="rv-dd-item rv-month-item${m === currentMonth ? ' selected' : ''}" data-value="${m}">
+            <span>${monthNames[m - 1]}</span>
+            <i class="fa fa-check rv-dd-check"></i>
+        </div>`;
+    }
+
+    let d = new frappe.ui.Dialog({
+        title: '<i class="fa fa-line-chart"></i> إجمالي الإيرادات',
+        fields: [
+            {
+                fieldtype: 'HTML',
+                fieldname: 'revenue_filters',
+                options: `
+                <style>
+                    .rv-filter-row { display: flex; gap: 10px; direction: rtl; margin-bottom: 14px; }
+                    .rv-filter-col { flex: 1; min-width: 0; position: relative; }
+                    .rv-trigger {
+                        width: 100%; padding: 11px 14px; border: 1.5px solid #d1d5db;
+                        border-radius: 10px; font-size: 14px; font-weight: 600;
+                        background: #fff; color: #1e293b; cursor: pointer;
+                        display: flex; align-items: center; justify-content: space-between;
+                        direction: rtl; transition: border-color .2s, box-shadow .2s;
+                    }
+                    .rv-trigger:hover { border-color: #0d9488; }
+                    .rv-trigger.open { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,0.12); }
+                    .rv-trigger-label { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+                    .rv-trigger .fa-chevron-down { font-size: 11px; color: #94a3b8; transition: transform .2s; }
+                    .rv-trigger.open .fa-chevron-down { transform: rotate(180deg); }
+                    .rv-dropdown {
+                        display: none; position: absolute; top: 100%; left: 0; right: 0;
+                        background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.15); z-index: 1050;
+                        padding: 6px; margin-top: 5px; max-height: 220px; overflow-y: auto;
+                    }
+                    .rv-dropdown::-webkit-scrollbar { width: 4px; }
+                    .rv-dropdown::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+                    .rv-dd-item {
+                        display: flex; align-items: center; justify-content: space-between;
+                        padding: 11px 14px; border-radius: 8px; cursor: pointer;
+                        font-size: 14px; font-weight: 600; color: #374151;
+                        transition: all .15s; direction: rtl;
+                    }
+                    .rv-dd-item:hover { background: #f1f5f9; }
+                    .rv-dd-item:active { transform: scale(0.98); }
+                    .rv-dd-item .rv-dd-check { display: none; color: #0d9488; font-size: 12px; }
+                    .rv-dd-item.selected {
+                        background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+                        color: #0d9488;
+                    }
+                    .rv-dd-item.selected .rv-dd-check { display: inline; }
+                </style>
+                <div class="rv-filter-row">
+                    <div class="rv-filter-col">
+                        <div class="rv-trigger-label"><i class="fa fa-calendar"></i> الشهر</div>
+                        <div class="rv-trigger" id="rv-month-trigger">
+                            <span id="rv-month-display">${monthNames[currentMonth - 1]}</span>
+                            <i class="fa fa-chevron-down"></i>
+                        </div>
+                        <div class="rv-dropdown" id="rv-month-dropdown">${monthItems}</div>
+                    </div>
+                    <div class="rv-filter-col">
+                        <div class="rv-trigger-label"><i class="fa fa-calendar-o"></i> السنة</div>
+                        <div class="rv-trigger" id="rv-year-trigger">
+                            <span id="rv-year-display">${currentYear}</span>
+                            <i class="fa fa-chevron-down"></i>
+                        </div>
+                        <div class="rv-dropdown" id="rv-year-dropdown">${yearItems}</div>
+                    </div>
+                </div>
+                `
+            },
+            {
+                fieldtype: 'HTML',
+                fieldname: 'revenue_content'
+            }
+        ],
+        size: 'large'
+    });
+    d.$wrapper.find('.modal-footer').hide();
+
+    d.show();
+
+    d._rv_year = currentYear;
+    d._rv_month = currentMonth;
+    d._rv_password = verifiedPassword || '';
+
+    function closeAllDropdowns() {
+        d.$wrapper.find('.rv-dropdown').hide();
+        d.$wrapper.find('.rv-trigger').removeClass('open');
+    }
+
+    // Month trigger
+    d.$wrapper.on('click', '#rv-month-trigger', function(e) {
+        e.stopPropagation();
+        let $dd = d.$wrapper.find('#rv-month-dropdown');
+        let isOpen = $dd.is(':visible');
+        closeAllDropdowns();
+        if (!isOpen) {
+            $dd.show();
+            $(this).addClass('open');
+            // Scroll selected into view
+            let sel = $dd.find('.selected')[0];
+            if (sel) sel.scrollIntoView({ block: 'nearest' });
+        }
+    });
+
+    // Year trigger
+    d.$wrapper.on('click', '#rv-year-trigger', function(e) {
+        e.stopPropagation();
+        let $dd = d.$wrapper.find('#rv-year-dropdown');
+        let isOpen = $dd.is(':visible');
+        closeAllDropdowns();
+        if (!isOpen) {
+            $dd.show();
+            $(this).addClass('open');
+        }
+    });
+
+    // Month item click
+    d.$wrapper.on('click', '.rv-month-item', function(e) {
+        e.stopPropagation();
+        d.$wrapper.find('.rv-month-item').removeClass('selected');
+        $(this).addClass('selected');
+        d._rv_month = parseInt($(this).data('value'));
+        d.$wrapper.find('#rv-month-display').text($(this).find('span').text());
+        closeAllDropdowns();
+        fetchTotalRevenue(d);
+    });
+
+    // Year item click
+    d.$wrapper.on('click', '.rv-year-item', function(e) {
+        e.stopPropagation();
+        d.$wrapper.find('.rv-year-item').removeClass('selected');
+        $(this).addClass('selected');
+        d._rv_year = parseInt($(this).data('value'));
+        d.$wrapper.find('#rv-year-display').text($(this).find('span').text());
+        closeAllDropdowns();
+        fetchTotalRevenue(d);
+    });
+
+    // Close dropdowns on click outside
+    d.$wrapper.on('click', function() {
+        closeAllDropdowns();
+    });
+
+    // Fetch on open
+    fetchTotalRevenue(d);
+}
+
+async function fetchTotalRevenue(dialog) {
+    const year = dialog._rv_year;
+    const month = dialog._rv_month;
+    const password = dialog._rv_password || '';
+
+    dialog.fields_dict.revenue_content.$wrapper.html(`
+        <div style="text-align:center; padding:30px;">
+            <i class="fa fa-spinner fa-spin" style="font-size:2.5rem; color:#0d9488;"></i>
+            <p style="margin-top:12px; color:#64748b; font-size:1.05em;">جاري تحميل التقرير...</p>
+        </div>
+    `);
+
+    try {
+        const response = await frappe.call({
+            method: 'mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_get_total_revenue',
+            args: { year: year, month: month, password: password }
+        });
+
+        const data = response.message;
+
+        if (data && data.success) {
+            displayRevenueReport(dialog, data);
+        } else {
+            dialog.fields_dict.revenue_content.$wrapper.html(`
+                <div style="color:#ef4444; padding:18px; background:#fef2f2; border-radius:10px; text-align:center; font-weight:600;">
+                    حدث خطأ أثناء جلب البيانات
+                </div>
+            `);
+        }
+    } catch (error) {
+        console.error('Error fetching revenue:', error);
+        dialog.fields_dict.revenue_content.$wrapper.html(`
+            <div style="color:#ef4444; padding:18px; background:#fef2f2; border-radius:10px; text-align:center; font-weight:600;">
+                حدث خطأ في الاتصال بالخادم
+            </div>
+        `);
+    }
+}
+
+function displayRevenueReport(dialog, data) {
+    const monthNames = [
+        'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+        'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+    const monthLabel = monthNames[data.month - 1] + ' ' + data.year;
+    const isProfit = data.net_revenue >= 0;
+    const fmt = (v) => Number(v || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    let html = `<div style="direction:rtl; font-family:inherit;">
+
+        <!-- Header -->
+        <div style="background:#0d9488; color:#fff; padding:14px 18px; border-radius:12px; margin-bottom:16px;
+            display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:800; font-size:1.15em;">تقرير الإيرادات</span>
+            <span style="font-weight:700; font-size:0.95em; opacity:0.9;">${monthLabel}</span>
+        </div>
+
+        <!-- Sales -->
+        <div style="margin-bottom:14px;">
+            <div style="font-weight:800; font-size:13px; color:#0d9488; margin-bottom:8px; padding:0 4px;">المبيعات والتكلفة</div>
+            <div style="background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+                <div style="display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #f1f5f9;">
+                    <span style="font-weight:600; color:#475569;">إجمالي المبيعات</span>
+                    <span style="font-weight:800; color:#0284c7; font-variant-numeric:tabular-nums;">${fmt(data.total_sales)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #f1f5f9;">
+                    <span style="font-weight:600; color:#475569;">تكلفة البضاعة</span>
+                    <span style="font-weight:800; color:#dc2626; font-variant-numeric:tabular-nums;">${fmt(data.cost_of_goods)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:13px 16px; background:#f0fdf4;">
+                    <span style="font-weight:800; color:#166534;">هامش الربح</span>
+                    <span style="font-weight:900; color:#16a34a; font-size:1.05em; font-variant-numeric:tabular-nums;">${fmt(data.gross_revenue)}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expenses -->
+        <div style="margin-bottom:14px;">
+            <div style="font-weight:800; font-size:13px; color:#dc2626; margin-bottom:8px; padding:0 4px;">المصروفات</div>
+            <div style="background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+                <div style="display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #f1f5f9;">
+                    <span style="font-weight:600; color:#475569;">مصروفات نقطة البيع</span>
+                    <span style="font-weight:800; color:#b91c1c; font-variant-numeric:tabular-nums;">${fmt(data.pos_expenses)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #f1f5f9;">
+                    <span style="font-weight:600; color:#475569;">المصروفات العامة</span>
+                    <span style="font-weight:800; color:#c2410c; font-variant-numeric:tabular-nums;">${fmt(data.general_expenses)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:13px 16px; background:#fef2f2;">
+                    <span style="font-weight:800; color:#991b1b;">إجمالي المصروفات</span>
+                    <span style="font-weight:900; color:#dc2626; font-size:1.05em; font-variant-numeric:tabular-nums;">${fmt(data.total_expenses)}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Net Revenue -->
+        <div style="background:${isProfit ? '#059669' : '#dc2626'}; color:#fff; padding:16px 18px; border-radius:12px;
+            display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:800; font-size:1.05em;">صافي الإيرادات</span>
+            <span style="font-weight:900; font-size:1.35em; font-variant-numeric:tabular-nums;">${fmt(data.net_revenue)}</span>
+        </div>`;
+
+    // Main shareholder share
+    if (data.main_shareholder) {
+        const sh = data.main_shareholder;
+        html += `
+        <div style="background:#7c3aed; color:#fff; padding:14px 18px; border-radius:12px; margin-top:10px;
+            display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:800; font-size:1em;">حصة ${sh.name} <span style="opacity:0.8; font-size:0.85em;">(${sh.percentage}%)</span></span>
+            <span style="font-weight:900; font-size:1.25em; font-variant-numeric:tabular-nums;">${fmt(sh.share_amount)}</span>
+        </div>`;
+    }
+
+    html += `</div>`;
+    dialog.fields_dict.revenue_content.$wrapper.html(html);
+}
+
 // Daily Sales Dialog and Functions
 let dailySalesData = null;
 
@@ -7514,7 +7945,7 @@ function printDailySales(salesDate) {
             let textContent = '';
             // Header
             textContent += '================================\n';
-            textContent += (typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور') + '\n';
+            textContent += (typeof company_print_name !== 'undefined' ? company_print_name : 'Elsaeed-السعيد') + '\n';
             if (typeof company_phone !== 'undefined' && company_phone) { textContent += company_phone + '\n'; }
             textContent += '================================\n';
             textContent += 'مبيعات اليوم\n';
@@ -7585,8 +8016,6 @@ function printDailySales(salesDate) {
 </head>
 <body>
   <div class="header">
-    <img src="/assets/mobile_pos/icons/web-app-manifest-192x192.png" alt="Elnoor-النور" style="width:60px;height:60px;border-radius:12px;margin-bottom:5px;">
-    <div style="font-size:14px;font-weight:bold;">${typeof company_print_name !== 'undefined' ? company_print_name : 'Elnoor-النور'}</div>
     <h2>مبيعات اليوم</h2>
     <p>التاريخ: ${salesDate}</p>
     <p>وقت الطباعة: ${new Date().toLocaleTimeString('ar-SA')}</p>
@@ -7906,114 +8335,26 @@ function printDailySales(salesDate) {
     });
 
 
-    // --- Submit / Save-as-Draft logic ---
-    async function doSubmitInvoice(save_as_draft) {
+    // --- Submit invoice ---
+    $(wrapper).on('click', '#mini-pos-submit', async function(e) {
+        e.preventDefault();
         let customer_label = $('#mini-pos-customer').val(), customer = findValue(customers, customer_label);
+    if (!customer) return showMsg(TEXT.VALIDATE_CUSTOMER, "error");
+    if (!pos_items.length) return showMsg(TEXT.PLEASE_ADD_ITEM, "error");
         let payment_type = ensureModeSelectionValid({ syncStorage: true });
 
-        if (save_as_draft) {
-            $('#mini-pos-submit').prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i> ${TEXT.SAVING_DRAFT}`);
-        } else {
-            $('#mini-pos-submit').prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i> ${TEXT.SUBMITTING}`);
-        }
+        $('#mini-pos-submit').prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i> ${TEXT.SUBMITTING}`);
 
+        // --- Calculate totals for payment ---
         let calc = calculate_tax_and_grand_total(pos_items);
-        let paidVal = Math.max(0, parseFloat(paid_amount) || 0);
-
-        // If editing a draft and submitting, use the update+submit flow
-        if (editing_draft && !save_as_draft) {
-            try {
-                // First update the draft with current items
-                await frappe.call({
-                    method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_update_draft_invoice",
-                    type: "POST",
-                    args: {
-                        invoice_name: editing_draft,
-                        data: JSON.stringify({
-                            customer,
-                            items: pos_items.map(i => ({
-                                item_code: i.item_code, qty: i.qty, rate: i.rate,
-                                uom: i.uom, conversion_factor: i.conversion_factor
-                            })),
-                            discount_amount: calc.discount,
-                            apply_discount_on: "Grand Total"
-                        })
-                    }
-                });
-                // Then submit the draft
-                let sr = await frappe.call({
-                    method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_submit_draft_invoice",
-                    args: {
-                        invoice_name: editing_draft,
-                        data: JSON.stringify({
-                            mode_of_payment: payment_type,
-                            paid_amount: paidVal > 0 ? Math.min(paidVal, calc.grand_total) : 0,
-                            overpayment_amount: paidVal > calc.grand_total ? paidVal - calc.grand_total : 0
-                        })
-                    }
-                });
-                let doc = sr.message;
-                let totalPaid = (paidVal > 0 ? Math.min(paidVal, calc.grand_total) : 0) + (paidVal > calc.grand_total ? paidVal - calc.grand_total : 0);
-                $('#mini-pos-result').html(`<div class="mini-pos-success">${TEXT.SUCCESS_CREATED_INVOICE(escape_html(doc.name))}</div>
-                    <button id="mini-pos-print" class="btn btn-outline-secondary btn-sm" style="margin-bottom:7px;"><i class="fa fa-print"></i> ${TEXT.PRINT}</button>
-                    <button id="mini-pos-new" class="btn btn-link btn-sm ml-2" style="margin-bottom:7px;">${TEXT.NEW_INVOICE_LINK}</button>`);
-                $('#mini-pos-submit').hide();
-                last_invoice = doc.name;
-                let balance_res = await frappe.call({ method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_get_customer_balance", args: { customer } });
-                let customer_balance = balance_res.message || 0;
-                last_invoice_data = {
-                    name: doc.name, customer_label, customer, items: pos_items,
-                    total: calc.total, discount: calc.discount, grand_total: calc.grand_total,
-                    paid_amount: totalPaid, payment_mode: payment_type,
-                    custom_hash: doc.custom_hash, customer_balance
-                };
-                showInvoicePrintOption(doc, customer_label, pos_items, calc, totalPaid, payment_type, customer_balance);
-                editing_draft = null;
-                return;
-            } catch (err) {
-                let msg = err.message || (err._server_messages && JSON.parse(err._server_messages)[0]) || TEXT.GENERIC_ERROR;
-                showMsg(msg, "error");
-            }
-            $('#mini-pos-submit').prop('disabled', false).html(`<i class="fa fa-check"></i> ${TEXT.SUBMIT_PRINT}`);
-            return;
-        }
-
-        // If editing a draft and saving as draft again, update it
-        if (editing_draft && save_as_draft) {
-            try {
-                let r = await frappe.call({
-                    method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_update_draft_invoice",
-                    type: "POST",
-                    args: {
-                        invoice_name: editing_draft,
-                        data: JSON.stringify({
-                            customer,
-                            items: pos_items.map(i => ({
-                                item_code: i.item_code, qty: i.qty, rate: i.rate,
-                                uom: i.uom, conversion_factor: i.conversion_factor
-                            })),
-                            discount_amount: calc.discount,
-                            apply_discount_on: "Grand Total"
-                        })
-                    }
-                });
-                frappe.show_alert({ message: TEXT.DRAFT_SAVED(editing_draft), indicator: 'blue' }, 5);
-                editing_draft = null;
-                clearMiniPOS();
-            } catch (err) {
-                let msg = err.message || (err._server_messages && JSON.parse(err._server_messages)[0]) || TEXT.GENERIC_ERROR;
-                showMsg(msg, "error");
-            }
-            $('#mini-pos-submit').prop('disabled', false).html(`<i class="fa fa-check"></i> ${TEXT.SUBMIT_PRINT}`);
-            return;
-        }
-
-        // Normal flow: create new invoice (or new draft)
         let invoice = {
             customer,
             items: pos_items.map(i => ({
-                item_code: i.item_code, qty: i.qty, rate: i.rate,
-                uom: i.uom, conversion_factor: i.conversion_factor
+                item_code: i.item_code,
+                qty: i.qty,
+                rate: i.rate,
+                uom: i.uom,
+                conversion_factor: i.conversion_factor
             })),
             mode_of_payment: payment_type,
             total: calc.total,
@@ -8022,26 +8363,18 @@ function printDailySales(salesDate) {
             apply_discount_on: "Grand Total",
             paid_amount: 0
         };
+        let paidVal = Math.max(0, parseFloat(paid_amount) || 0);
+        // Allow overpayment - excess will be stored in customer account
         invoice.paid_amount = paidVal > 0 ? Math.min(paidVal, calc.grand_total) : 0;
         invoice.overpayment_amount = paidVal > calc.grand_total ? paidVal - calc.grand_total : 0;
-
-        if (save_as_draft) {
-            invoice.save_as_draft = 1;
-        }
-
         try {
             let r = await frappe.call({ method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_create_invoice", type: "POST", args: { data: JSON.stringify(invoice) } });
             let doc = r.message;
 
+            // Check if duplicate invoice detected
             if (doc.duplicate) {
                 showDuplicateInvoiceDialog(doc.duplicate_invoice, doc.message, customer_label);
                 $('#mini-pos-submit').prop('disabled', false).html(`<i class="fa fa-check"></i> ${TEXT.SUBMIT_PRINT}`);
-                return;
-            }
-
-            if (save_as_draft && doc.is_draft) {
-                frappe.show_alert({ message: TEXT.DRAFT_SAVED(doc.name), indicator: 'blue' }, 5);
-                clearMiniPOS();
                 return;
             }
 
@@ -8051,191 +8384,43 @@ function printDailySales(salesDate) {
             $('#mini-pos-submit').hide();
             last_invoice = doc.name;
 
+            // Get customer balance after this invoice
             let balance_res = await frappe.call({
                 method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_get_customer_balance",
                 args: { customer: customer }
             });
             let customer_balance = balance_res.message || 0;
+
+            // Calculate total paid (invoice payment + overpayment)
             let totalPaid = (invoice.paid_amount || 0) + (invoice.overpayment_amount || 0);
+
+            // Capture balance before this invoice for printing
+            let balance_before = current_customer_balance;
+
+            // Store invoice data for reprint
             last_invoice_data = {
-                name: doc.name, customer_label, customer, items: pos_items,
-                total: calc.total, discount: calc.discount, grand_total: calc.grand_total,
-                paid_amount: totalPaid, payment_mode: payment_type,
-                custom_hash: doc.custom_hash, customer_balance
+                name: doc.name,
+                customer_label: customer_label,
+                customer: customer,
+                items: pos_items,
+                total: calc.total,
+                discount: calc.discount,
+                grand_total: calc.grand_total,
+                paid_amount: totalPaid,
+                payment_mode: payment_type,
+                custom_hash: doc.custom_hash,
+                customer_balance: customer_balance,
+                balance_before: balance_before
             };
-            showInvoicePrintOption(doc, customer_label, pos_items, calc, totalPaid, payment_type, customer_balance);
+
+            // Show print option dialog
+            showInvoicePrintOption(doc, customer_label, pos_items, calc, totalPaid, payment_type, customer_balance, balance_before);
             return;
         } catch (err) {
             let msg = err.message || (err._server_messages && JSON.parse(err._server_messages)[0]) || TEXT.GENERIC_ERROR;
             showMsg(msg, "error");
         }
         $('#mini-pos-submit').prop('disabled', false).html(`<i class="fa fa-check"></i> ${TEXT.SUBMIT_PRINT}`);
-    }
-
-    // --- Submit button click ---
-    $(wrapper).on('click', '#mini-pos-submit', async function(e) {
-        e.preventDefault();
-        let customer_label = $('#mini-pos-customer').val(), customer = findValue(customers, customer_label);
-        if (!customer) return showMsg(TEXT.VALIDATE_CUSTOMER, "error");
-        if (!pos_items.length) return showMsg(TEXT.PLEASE_ADD_ITEM, "error");
-
-        // If draft invoices allowed, show choice popup
-        if (allow_draft_invoices) {
-            let choiceDialog = new frappe.ui.Dialog({
-                title: `<i class="fa fa-save" style="color:#3b82f6;"></i> ${TEXT.DRAFT_OR_SUBMIT_TITLE}`,
-                fields: [{
-                    fieldtype: 'HTML', fieldname: 'choice_html',
-                    options: `<div style="text-align:center;padding:20px 10px;">
-                        <p style="font-size:1.1em;color:#334155;margin-bottom:24px;">${TEXT.DRAFT_OR_SUBMIT_MSG}</p>
-                        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-                            <button class="btn btn-default btn-lg draft-choice-draft" style="min-width:160px;padding:14px 24px;font-size:1.1em;border-radius:12px;border:2px solid #93c5fd;">
-                                <i class="fa fa-file-o" style="margin-left:8px;color:#3b82f6;"></i> ${TEXT.SAVE_DRAFT}
-                            </button>
-                            <button class="btn btn-success btn-lg draft-choice-submit" style="min-width:160px;padding:14px 24px;font-size:1.1em;border-radius:12px;">
-                                <i class="fa fa-check" style="margin-left:8px;"></i> ${TEXT.SUBMIT_AND_PRINT}
-                            </button>
-                        </div>
-                    </div>`
-                }]
-            });
-            choiceDialog.$wrapper.find('.modal-footer').hide();
-            choiceDialog.show();
-
-            choiceDialog.$wrapper.on('click', '.draft-choice-draft', function() {
-                choiceDialog.hide();
-                doSubmitInvoice(true);
-            });
-            choiceDialog.$wrapper.on('click', '.draft-choice-submit', function() {
-                choiceDialog.hide();
-                doSubmitInvoice(false);
-            });
-            return;
-        }
-
-        // If drafts not allowed, submit directly
-        doSubmitInvoice(false);
-    });
-
-
-    // --- Draft Invoices List ---
-    $(wrapper).on('click', '#mini-pos-drafts-btn', async function() {
-        // Require customer selection first
-        let customer_label = $('#mini-pos-customer').val(), customer = findValue(customers, customer_label);
-        if (!customer) return showMsg(TEXT.SELECT_CUSTOMER_FOR_DRAFTS, "error");
-
-        let d = new frappe.ui.Dialog({
-            title: `<i class="fa fa-file-o"></i> ${TEXT.DRAFT_INVOICES_TITLE}`,
-            fields: [{ fieldtype: 'HTML', fieldname: 'draft_list' }],
-            size: 'large'
-        });
-
-        d.fields_dict.draft_list.$wrapper.html(`<div style="text-align:center;padding:30px;"><i class="fa fa-spinner fa-spin fa-2x"></i></div>`);
-        d.show();
-
-        try {
-            let r = await frappe.call({
-                method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_get_draft_invoices",
-                args: { customer: customer }
-            });
-            let drafts = r.message || [];
-            if (!drafts.length) {
-                d.fields_dict.draft_list.$wrapper.html(`<div style="text-align:center;padding:40px;color:#94a3b8;"><i class="fa fa-file-o fa-3x" style="margin-bottom:15px;display:block;"></i>${TEXT.NO_DRAFT_INVOICES}</div>`);
-                return;
-            }
-
-            let rows = drafts.map(inv => `
-                <div class="draft-row" data-name="${inv.name}" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;gap:8px;cursor:pointer;transition:background 0.15s;">
-                    <div style="flex:1;min-width:180px;">
-                        <div style="font-weight:700;color:#1e293b;font-size:1.05em;">${inv.customer_name || inv.customer}</div>
-                        <div style="color:#64748b;font-size:0.9em;">${inv.name} · ${inv.posting_date} · ${inv.item_count} أصناف</div>
-                    </div>
-                    <div style="font-weight:700;color:#0f766e;font-size:1.1em;min-width:80px;text-align:center;">
-                        ${format_number(inv.grand_total)}
-                    </div>
-                    <div style="flex-shrink:0;" onclick="event.stopPropagation();">
-                        <button class="btn btn-xs btn-danger draft-delete-btn" data-name="${inv.name}">
-                            <i class="fa fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-
-            d.fields_dict.draft_list.$wrapper.html(`<div style="max-height:60vh;overflow-y:auto;">${rows}</div>`);
-
-            // Hover effect
-            d.$wrapper.on('mouseenter', '.draft-row', function() { $(this).css('background', '#f0f9ff'); });
-            d.$wrapper.on('mouseleave', '.draft-row', function() { $(this).css('background', ''); });
-
-            // Click row to load draft into page
-            d.$wrapper.on('click', '.draft-row', async function() {
-                let invoiceName = $(this).data('name');
-                d.hide();
-                try {
-                    let r = await frappe.call({
-                        method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_get_draft_invoice",
-                        args: { invoice_name: invoiceName }
-                    });
-                    let draft = r.message;
-                    // Clear current state and load draft data
-                    pos_items = [];
-                    last_invoice = null;
-                    last_invoice_data = null;
-                    return_mode = false;
-                    paid_amount_manual = false;
-                    paid_amount = 0;
-                    discount_amount = draft.discount_amount || 0;
-                    editing_draft = draft.name;
-
-                    // Load items into pos_items
-                    for (let item of draft.items) {
-                        pos_items.push({
-                            item_code: item.item_code,
-                            item_name: item.item_name,
-                            qty: item.qty,
-                            rate: item.rate,
-                            uom: item.uom,
-                            conversion_factor: item.conversion_factor
-                        });
-                    }
-
-                    // Set discount
-                    $('#mini-pos-discount').val((draft.discount_amount || 0).toFixed(2));
-
-                    // Re-render
-                    renderItems();
-                    updateNewBtn();
-                    update_top_action_btns();
-                    $('#mini-pos-result').empty();
-                    $('#mini-pos-submit').show().prop('disabled', false).html(`<i class="fa fa-check"></i> ${TEXT.SUBMIT_PRINT}`);
-                    $('#mini-pos-new').remove();
-                    $('#mini-pos-print').remove();
-
-                } catch (err) {
-                    frappe.msgprint(err.message || TEXT.GENERIC_ERROR);
-                }
-            });
-
-            // Delete draft
-            d.$wrapper.on('click', '.draft-delete-btn', async function() {
-                let invoiceName = $(this).data('name');
-                let $row = $(this).closest('.draft-row');
-                frappe.confirm(TEXT.DRAFT_DELETE_CONFIRM, async () => {
-                    try {
-                        await frappe.call({
-                            method: "mobile_pos.mobile_pos.page.mini_pos.api.mini_pos_delete_draft_invoice",
-                            args: { invoice_name: invoiceName }
-                        });
-                        $row.slideUp(300, () => $row.remove());
-                        frappe.show_alert({ message: TEXT.DRAFT_DELETED(invoiceName), indicator: 'orange' }, 3);
-                    } catch (err) {
-                        frappe.msgprint(err.message || TEXT.GENERIC_ERROR);
-                    }
-                });
-            });
-
-        } catch (err) {
-            d.fields_dict.draft_list.$wrapper.html(`<div style="text-align:center;padding:30px;color:#ef4444;">${TEXT.GENERIC_ERROR}</div>`);
-        }
     });
 
 
@@ -8250,7 +8435,6 @@ function printDailySales(salesDate) {
         last_invoice = null;
         last_invoice_data = null;
         return_mode = false;
-        editing_draft = null;
         discount_amount = 0;
         $('#mini-pos-discount').val('0.00').prop('disabled', false);
         paid_amount_manual = false;
@@ -8299,7 +8483,8 @@ function printDailySales(salesDate) {
                 last_invoice_data.payment_mode,
                 last_invoice_data.custom_hash,
                 last_invoice_data.is_return || false,
-                customer_balance
+                customer_balance,
+                last_invoice_data.balance_before || 0
             );
         }
     });

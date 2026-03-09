@@ -36,7 +36,7 @@ def get_profile_or_throw():
                 break
 
     if not profile:
-        frappe.throw(_("No active Mini POS Profile found for your user."))
+        return None
 
     return frappe.get_doc("Mini POS Profile", profile.name)
 
@@ -45,6 +45,8 @@ def get_profile_or_throw():
 def get_context():
     """Get profile context: company, modes of payment, customers, suppliers."""
     profile = get_profile_or_throw()
+    if not profile:
+        return {"company": "", "modes": [], "customers": [], "suppliers": [], "profile_name": ""}
     company = profile.company
 
     all_modes = frappe.get_all(
@@ -95,6 +97,8 @@ def get_context():
 def create_payment_entry(data):
     """Create a Payment Entry (Receive or Pay)."""
     profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("Please set up a Mini POS Profile before creating payment entries."))
     data = frappe._dict(json.loads(data) if isinstance(data, str) else data)
 
     payment_type = data.get("payment_type")
@@ -176,7 +180,6 @@ def create_payment_entry(data):
         pe.remarks = remarks
 
     pe.insert(ignore_permissions=True)
-    pe.submit()
     frappe.db.commit()
 
     return {
@@ -188,16 +191,88 @@ def create_payment_entry(data):
 
 
 @frappe.whitelist()
+def create_transfer_entry(data):
+    """Create an Internal Transfer Payment Entry between two modes of payment."""
+    profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("Please set up a Mini POS Profile before creating payment entries."))
+    data = frappe._dict(json.loads(data) if isinstance(data, str) else data)
+
+    from_mode = data.get("from_mode_of_payment")
+    to_mode = data.get("to_mode_of_payment")
+
+    if not from_mode:
+        frappe.throw(_("Source Mode of Payment is required."))
+    if not to_mode:
+        frappe.throw(_("Destination Mode of Payment is required."))
+    if from_mode == to_mode:
+        frappe.throw(_("Source and destination Mode of Payment must be different."))
+
+    amount = flt(data.get("amount"))
+    if amount <= 0:
+        frappe.throw(_("Amount must be greater than zero."))
+
+    company = profile.company
+
+    def get_mop_account(mode_name):
+        try:
+            mop = frappe.get_doc("Mode of Payment", mode_name)
+        except frappe.DoesNotExistError:
+            frappe.throw(_("Mode of Payment {0} not found").format(mode_name))
+        for row in mop.accounts:
+            if row.company == company:
+                return row.default_account
+        frappe.throw(_("No account found in Mode of Payment '{0}' for company '{1}'").format(
+            mode_name, company
+        ))
+
+    paid_from = get_mop_account(from_mode)
+    paid_to = get_mop_account(to_mode)
+
+    pe = frappe.get_doc({
+        "doctype": "Payment Entry",
+        "payment_type": "Internal Transfer",
+        "company": company,
+        "posting_date": nowdate(),
+        "paid_from": paid_from,
+        "paid_to": paid_to,
+        "paid_amount": amount,
+        "received_amount": amount,
+        "source_exchange_rate": 1,
+        "target_exchange_rate": 1,
+        "reference_no": "POS-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8)),
+        "reference_date": nowdate(),
+        "custom_mini_pos_profile": profile.name,
+        "references": []
+    })
+
+    remarks = data.get("remarks")
+    if remarks:
+        pe.remarks = remarks
+
+    pe.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "name": pe.name,
+        "payment_type": pe.payment_type,
+        "amount": pe.paid_amount
+    }
+
+
+@frappe.whitelist()
 def get_recent_entries(limit=20):
     """Get recent payment entries created from this page."""
     profile = get_profile_or_throw()
+    if not profile:
+        return []
 
     entries = frappe.get_all(
         "Payment Entry",
         filters={
             "company": profile.company,
             "custom_mini_pos_profile": profile.name,
-            "docstatus": ["in", [0, 1]]
+            "docstatus": ["in", [0, 1, 2]]
         },
         fields=[
             "name", "payment_type", "party_type", "party", "party_name",
@@ -209,3 +284,137 @@ def get_recent_entries(limit=20):
     )
 
     return entries
+
+
+@frappe.whitelist()
+def get_entry_details(entry_name):
+    """Get full details of a Payment Entry."""
+    if not entry_name:
+        frappe.throw(_("Entry name is required"))
+
+    profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("No POS profile found"))
+
+    doc = frappe.get_doc("Payment Entry", entry_name)
+
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this entry"))
+
+    doc_profile = doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name:
+        frappe.throw(_("You don't have access to this entry"))
+
+    return {
+        "name": doc.name,
+        "payment_type": doc.payment_type,
+        "party_type": doc.party_type,
+        "party": doc.party,
+        "party_name": doc.party_name,
+        "posting_date": str(doc.posting_date),
+        "paid_amount": flt(doc.paid_amount),
+        "received_amount": flt(doc.received_amount),
+        "mode_of_payment": doc.mode_of_payment,
+        "paid_from": doc.paid_from,
+        "paid_to": doc.paid_to,
+        "reference_no": doc.reference_no,
+        "remarks": doc.remarks or "",
+        "docstatus": doc.docstatus,
+        "owner": frappe.get_value("User", doc.owner, "full_name") or doc.owner,
+        "custom_mini_pos_profile": doc.get("custom_mini_pos_profile") or ""
+    }
+
+
+@frappe.whitelist()
+def submit_entry(entry_name):
+    """Submit a draft Payment Entry."""
+    if not entry_name:
+        frappe.throw(_("Entry name is required"))
+
+    profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("No POS profile found"))
+
+    doc = frappe.get_doc("Payment Entry", entry_name)
+
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this entry"))
+
+    doc_profile = doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name:
+        frappe.throw(_("You don't have access to this entry"))
+
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft entries can be submitted"))
+
+    doc.submit()
+    frappe.db.commit()
+
+    return {
+        "success": True,
+        "name": doc.name,
+        "message": _("Payment Entry {0} submitted successfully").format(doc.name)
+    }
+
+
+@frappe.whitelist()
+def cancel_entry(entry_name):
+    """Cancel a submitted Payment Entry."""
+    if not entry_name:
+        frappe.throw(_("Entry name is required"))
+
+    profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("No POS profile found"))
+
+    doc = frappe.get_doc("Payment Entry", entry_name)
+
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this entry"))
+
+    doc_profile = doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name:
+        frappe.throw(_("You don't have access to this entry"))
+
+    if doc.docstatus != 1:
+        frappe.throw(_("Only submitted entries can be cancelled"))
+
+    doc.cancel()
+    frappe.db.commit()
+
+    return {
+        "success": True,
+        "name": doc.name,
+        "message": _("Payment Entry {0} cancelled successfully").format(doc.name)
+    }
+
+
+@frappe.whitelist()
+def delete_entry(entry_name):
+    """Delete a draft Payment Entry."""
+    if not entry_name:
+        frappe.throw(_("Entry name is required"))
+
+    profile = get_profile_or_throw()
+    if not profile:
+        frappe.throw(_("No POS profile found"))
+
+    doc = frappe.get_doc("Payment Entry", entry_name)
+
+    if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this entry"))
+
+    doc_profile = doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name:
+        frappe.throw(_("You don't have access to this entry"))
+
+    if doc.docstatus != 0:
+        frappe.throw(_("Only draft entries can be deleted"))
+
+    frappe.delete_doc("Payment Entry", entry_name, ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "success": True,
+        "message": _("Payment Entry {0} deleted successfully").format(entry_name)
+    }

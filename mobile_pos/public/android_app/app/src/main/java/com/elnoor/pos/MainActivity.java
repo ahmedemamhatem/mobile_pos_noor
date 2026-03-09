@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
         webView.setOnLongClickListener(v -> true);
 
         // User agent
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 MobilePOS-Android/1.3.5 SunyardPOS");
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 MobilePOS-Android/2.0.2 SunyardPOS");
 
         // ===== COOKIE SETTINGS =====
         CookieManager cookieManager = CookieManager.getInstance();

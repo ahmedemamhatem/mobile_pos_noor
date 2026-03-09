@@ -15,6 +15,10 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
         POS_DESC: "إدارة المبيعات والفواتير",
         STOCK_MANAGEMENT: "إدارة المخزون",
         STOCK_DESC: "تحويلات وحركات المخزون",
+        PAYMENT_SYSTEM: "قبض / صرف / تحويل",
+        PAYMENT_DESC: "سندات القبض والصرف والتحويل بين طرق الدفع",
+        ITEMS_MANAGEMENT: "إدارة الأصناف",
+        ITEMS_DESC: "عرض وإضافة وتعديل الأصناف والأسعار",
         TODAY_SALES: "مبيعات اليوم",
         TODAY_INVOICES: "فواتير اليوم",
         TOTAL_AMOUNT: "إجمالي المبلغ",
@@ -350,6 +354,16 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
             color: white;
         }
 
+        .payment-icon {
+            background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+            color: white;
+        }
+
+        .items-icon {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            color: white;
+        }
+
         .quick-card h3 {
             font-size: 1.75em;
             font-weight: 800;
@@ -414,6 +428,24 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
 
         .stock-btn:hover {
             box-shadow: 0 10px 28px rgba(16, 185, 129, 0.45);
+        }
+
+        .payment-btn {
+            background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+            box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35);
+        }
+
+        .payment-btn:hover {
+            box-shadow: 0 10px 28px rgba(245, 158, 11, 0.45);
+        }
+
+        .items-btn {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            box-shadow: 0 6px 16px rgba(249, 115, 22, 0.35);
+        }
+
+        .items-btn:hover {
+            box-shadow: 0 10px 28px rgba(249, 115, 22, 0.45);
         }
 
         /* Statistics Grid */
@@ -691,6 +723,28 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
                     <p>${TEXT.STOCK_DESC}</p>
                     <button class="quick-card-btn stock-btn" onclick="frappe.set_route('stock-trans')">
                         <i class="fa fa-cubes"></i> ${TEXT.OPEN}
+                    </button>
+                </div>
+
+                <div class="quick-card" data-page="pos-payment">
+                    <div class="quick-card-icon payment-icon">
+                        <i class="fa fa-money"></i>
+                    </div>
+                    <h3>${TEXT.PAYMENT_SYSTEM}</h3>
+                    <p>${TEXT.PAYMENT_DESC}</p>
+                    <button class="quick-card-btn payment-btn" onclick="frappe.set_route('pos-payment')">
+                        <i class="fa fa-money"></i> ${TEXT.OPEN}
+                    </button>
+                </div>
+
+                <div class="quick-card" data-page="items">
+                    <div class="quick-card-icon items-icon">
+                        <i class="fa fa-tags"></i>
+                    </div>
+                    <h3>${TEXT.ITEMS_MANAGEMENT}</h3>
+                    <p>${TEXT.ITEMS_DESC}</p>
+                    <button class="quick-card-btn items-btn" onclick="frappe.set_route('items')">
+                        <i class="fa fa-tags"></i> ${TEXT.OPEN}
                     </button>
                 </div>
             </div>
