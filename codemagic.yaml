@@ -6,12 +6,6 @@ workflows:
     working_directory: mobile_pos/public/android_app
     environment:
       java: 17
-      android_signing:
-        - elnoor_keystore
-      groups:
-        - android_credentials
-      vars:
-        PACKAGE_NAME: "com.elnoor.pos"
     triggering:
       events:
         - push
