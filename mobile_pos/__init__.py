@@ -1,4 +1,4 @@
-__version__ = "0.0.2"
+__version__ = "2.0.3"
 
 # Monkey patch for stock ledger - override is_negative_stock_allowed to check Company setting
 import erpnext.stock.stock_ledger
