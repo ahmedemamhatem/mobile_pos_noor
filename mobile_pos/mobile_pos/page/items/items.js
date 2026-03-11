@@ -64,7 +64,13 @@ const TEXT = {
     ITEMS_COUNT: count => `${count} صنف`,
     NO_DESCRIPTION: "لا يوجد وصف",
     DELETE_PRICE: "حذف",
-    CONFIRM_DELETE_PRICE: "هل أنت متأكد من حذف هذا السعر؟"
+    CONFIRM_DELETE_PRICE: "هل أنت متأكد من حذف هذا السعر؟",
+    CUSTOMER: "العميل",
+    SUPPLIER: "المورد",
+    SELECT_CUSTOMER: "اختر العميل",
+    SELECT_SUPPLIER: "اختر المورد",
+    ALL_CUSTOMERS: "جميع العملاء",
+    ALL_SUPPLIERS: "جميع الموردين"
 };
 
 let context = null;
@@ -241,10 +247,20 @@ $(wrapper).html(`
 .price-empty{text-align:center;padding:20px;color:#94a3b8;font-size:0.9em;font-weight:600;background:#f8fafc;border-radius:10px;border:2px dashed #e2e8f0;}
 .price-add-row{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:12px;background:#fffbeb;border-radius:12px;border:2px dashed #f59e0b;}
 .price-add-controls{display:flex;align-items:center;gap:6px;}
-.price-add-input{flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-size:0.95em;font-family:inherit;text-align:center;font-weight:700;outline:none;background:#fff;min-width:0;}
 .price-add-input:focus{border-color:#f59e0b;}
 .price-add-btn{background:linear-gradient(135deg,#f59e0b,#f97316);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:0.85em;transition:all 0.2s;font-family:inherit;white-space:nowrap;}
 .price-add-btn:hover{box-shadow:0 4px 12px rgba(245,158,11,0.3);}
+.price-party-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.price-party-btn{background:#f0f9ff;color:#0369a1;border:2px solid #bae6fd;border-radius:8px;padding:6px 10px;font-weight:600;cursor:pointer;font-size:0.78em;transition:all 0.2s;font-family:inherit;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.price-party-btn:hover{background:#e0f2fe;border-color:#7dd3fc;}
+.price-party-btn.selected{background:#dbeafe;border-color:#3b82f6;color:#1d4ed8;}
+.price-party-btn.supplier-btn{background:#fdf4ff;color:#a21caf;border-color:#f0abfc;}
+.price-party-btn.supplier-btn:hover{background:#fae8ff;border-color:#e879f9;}
+.price-party-btn.supplier-btn.selected{background:#f3e8ff;border-color:#a855f7;color:#7e22ce;}
+.price-party-tag{font-size:0.75em;padding:3px 8px;border-radius:6px;font-weight:700;display:inline-flex;align-items:center;gap:3px;}
+.price-party-tag.customer-tag{background:#dbeafe;color:#1d4ed8;}
+.price-party-tag.supplier-tag{background:#f3e8ff;color:#7e22ce;}
+.price-add-input{flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-size:1.15em;font-family:inherit;text-align:center;font-weight:700;outline:none;background:#fff;min-width:0;}
 
 .items-load-more{text-align:center;margin-top:20px;}
 .items-load-more-btn{background:#fff;border:2px solid #e2e8f0;border-radius:14px;padding:12px 28px;font-family:inherit;font-size:1em;font-weight:700;color:#64748b;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px;}
@@ -815,16 +831,21 @@ $(wrapper).on('click', '.item-row', function() {
         let val = parseFloat(convertArabicToEnglishNumbers(input.val())) || 0;
         let uomBtn = modal.find(`.price-uom-btn[data-name="${priceName}"]`);
         let uom = uomBtn.data('value') || '';
+        let partyBtn = modal.find(`.price-party-btn[data-name="${priceName}"]`);
+        let partyType = partyBtn.data('party-type') || '';
+        let partyValue = partyBtn.data('value') || '';
+        let customer = partyType === 'customer' ? partyValue : '';
+        let supplier = partyType === 'supplier' ? partyValue : '';
         let $btn = $(this);
         $btn.prop('disabled', true).text(TEXT.SAVING);
         try {
             await frappe.call({
                 method: "mobile_pos.mobile_pos.page.items.api.update_item_price",
                 type: "POST",
-                args: { data: JSON.stringify({ name: priceName, price_list_rate: val, uom: uom }) }
+                args: { data: JSON.stringify({ name: priceName, price_list_rate: val, uom: uom, customer: customer, supplier: supplier }) }
             });
             showToast(TEXT.SUCCESS_PRICE, 'success');
-            $btn.prop('disabled', false).text(TEXT.SAVE);
+            loadPricesForModal(modal, itemCode);
             loadItems($('#items-search').val().trim());
         } catch (err) {
             showToast(err.message || TEXT.ERROR, 'error');
@@ -854,6 +875,35 @@ $(wrapper).on('click', '.item-row', function() {
         }
     });
 
+    // Customer/Supplier popup for price rows (existing and add)
+    modal.on('click', '.price-party-btn', function() {
+        let $partyBtn = $(this);
+        let partyType = $partyBtn.data('party-type');
+        let items, title, allLabel;
+        if (partyType === 'customer') {
+            items = (context.customers || []).map(c => c.name);
+            title = TEXT.SELECT_CUSTOMER;
+            allLabel = TEXT.ALL_CUSTOMERS;
+        } else {
+            items = (context.suppliers || []).map(s => s.name);
+            title = TEXT.SELECT_SUPPLIER;
+            allLabel = TEXT.ALL_SUPPLIERS;
+        }
+        // Add "All" option to clear selection
+        let allItems = [allLabel].concat(items);
+        showPopupSelector(title, allItems, function(val) {
+            if (val === allLabel) {
+                $partyBtn.data('value', '');
+                $partyBtn.find('.price-party-label, .price-add-party-label').text(partyType === 'customer' ? TEXT.SELECT_CUSTOMER : TEXT.SELECT_SUPPLIER);
+                $partyBtn.removeClass('selected');
+            } else {
+                $partyBtn.data('value', val);
+                $partyBtn.find('.price-party-label, .price-add-party-label').text(val);
+                $partyBtn.addClass('selected');
+            }
+        });
+    });
+
     // Price list popup selector
     modal.on('click', '.price-list-select-btn', function() {
         let $selectBtn = $(this);
@@ -872,6 +922,11 @@ $(wrapper).on('click', '.item-row', function() {
         let priceList = row.find('.price-list-select-btn').data('value');
         let uom = row.find('.price-uom-add-btn').data('value') || '';
         let val = parseFloat(convertArabicToEnglishNumbers(row.find('.price-add-input').val())) || 0;
+        let partyBtn = row.find('.price-add-party-btn');
+        let partyType = partyBtn.data('party-type') || '';
+        let partyValue = partyBtn.data('value') || '';
+        let customer = partyType === 'customer' ? partyValue : '';
+        let supplier = partyType === 'supplier' ? partyValue : '';
         if (!priceList) return showToast(TEXT.REQUIRED_PRICE_LIST, 'error');
 
         let $btn = $(this);
@@ -880,7 +935,7 @@ $(wrapper).on('click', '.item-row', function() {
             await frappe.call({
                 method: "mobile_pos.mobile_pos.page.items.api.create_item_price",
                 type: "POST",
-                args: { data: JSON.stringify({ item_code: itemCode, price_list: priceList, price_list_rate: val, uom: uom }) }
+                args: { data: JSON.stringify({ item_code: itemCode, price_list: priceList, price_list_rate: val, uom: uom, customer: customer, supplier: supplier }) }
             });
             showToast(TEXT.SUCCESS_PRICE, 'success');
             loadPricesForModal(modal, itemCode);
@@ -897,6 +952,78 @@ $(wrapper).on('click', '.item-row', function() {
 });
 
 // ========== LOAD PRICES INTO MODAL ==========
+function buildPriceRowHtml(p, type) {
+    let partyTag = '';
+    let partyBtn = '';
+
+    if (type === 'selling') {
+        if (p.customer) {
+            partyTag = `<span class="price-party-tag customer-tag"><i class="fa fa-user"></i> ${escapeHtml(p.customer)}</span>`;
+        }
+        partyBtn = `<button type="button" class="price-party-btn${p.customer ? ' selected' : ''}" data-name="${escapeHtml(p.name)}" data-party-type="customer" data-value="${escapeHtml(p.customer || '')}">
+            <i class="fa fa-user"></i>
+            <span class="price-party-label">${p.customer ? escapeHtml(p.customer) : TEXT.SELECT_CUSTOMER}</span>
+        </button>`;
+    } else {
+        if (p.supplier) {
+            partyTag = `<span class="price-party-tag supplier-tag"><i class="fa fa-truck"></i> ${escapeHtml(p.supplier)}</span>`;
+        }
+        partyBtn = `<button type="button" class="price-party-btn supplier-btn${p.supplier ? ' selected' : ''}" data-name="${escapeHtml(p.name)}" data-party-type="supplier" data-value="${escapeHtml(p.supplier || '')}">
+            <i class="fa fa-truck"></i>
+            <span class="price-party-label">${p.supplier ? escapeHtml(p.supplier) : TEXT.SELECT_SUPPLIER}</span>
+        </button>`;
+    }
+
+    return `<div class="price-row">
+        <div class="price-row-list">${escapeHtml(p.price_list)} ${partyTag}</div>
+        <div class="price-row-controls">
+            <div class="price-row-inputs">
+                <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
+                    <i class="fa fa-balance-scale"></i>
+                    <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
+                </button>
+                <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
+            </div>
+            <div class="price-party-row">
+                ${partyBtn}
+            </div>
+            <div class="price-row-actions">
+                <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}"><i class="fa fa-check"></i> ${TEXT.SAVE}</button>
+                <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i> ${TEXT.DELETE_PRICE}</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+function buildAddPriceRowHtml(type) {
+    let partyLabel = type === 'selling' ? TEXT.SELECT_CUSTOMER : TEXT.SELECT_SUPPLIER;
+    let partyType = type === 'selling' ? 'customer' : 'supplier';
+    let partyBtnClass = type === 'selling' ? '' : ' supplier-btn';
+    let partyIcon = type === 'selling' ? 'fa-user' : 'fa-truck';
+
+    return `<div class="price-add-row" data-type="${type}">
+        <button type="button" class="items-field-select-btn price-list-select-btn" data-value="" style="width:100%;padding:10px 12px;font-size:0.88em;">
+            <i class="fa fa-list"></i>
+            <span class="price-list-select-label">${TEXT.SELECT_PRICE_LIST}</span>
+            <i class="fa fa-chevron-down"></i>
+        </button>
+        <div class="price-add-controls">
+            <button type="button" class="items-field-select-btn price-uom-add-btn" data-value="" style="min-width:70px;max-width:110px;padding:10px 8px;font-size:0.82em;">
+                <i class="fa fa-balance-scale"></i>
+                <span class="price-uom-add-label">${TEXT.SELECT_UOM}</span>
+            </button>
+            <input type="text" class="price-add-input" placeholder="0.00" inputmode="decimal">
+        </div>
+        <div class="price-party-row">
+            <button type="button" class="price-party-btn price-add-party-btn${partyBtnClass}" data-party-type="${partyType}" data-value="">
+                <i class="fa ${partyIcon}"></i>
+                <span class="price-add-party-label">${partyLabel}</span>
+            </button>
+        </div>
+        <button type="button" class="price-add-btn"><i class="fa fa-plus"></i> ${TEXT.ADD_PRICE}</button>
+    </div>`;
+}
+
 function loadPricesForModal(modal, itemCode) {
     modal.find('#prices-content').html(`<div style="text-align:center;padding:20px;color:#64748b;"><div class="items-spinner" style="margin:0 auto 12px;"></div>${TEXT.LOADING}</div>`);
     frappe.call({
@@ -911,42 +1038,13 @@ function loadPricesForModal(modal, itemCode) {
                 <div class="price-section-title"><span class="sell-dot"></span> ${TEXT.SELLING_PRICES}</div>`;
             if (data.selling && data.selling.length) {
                 data.selling.forEach(p => {
-                    html += `<div class="price-row">
-                        <div class="price-row-list">${escapeHtml(p.price_list)}</div>
-                        <div class="price-row-controls">
-                            <div class="price-row-inputs">
-                                <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
-                                    <i class="fa fa-balance-scale"></i>
-                                    <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
-                                </button>
-                                <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
-                            </div>
-                            <div class="price-row-actions">
-                                <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}"><i class="fa fa-check"></i> ${TEXT.SAVE}</button>
-                                <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i> ${TEXT.DELETE_PRICE}</button>
-                            </div>
-                        </div>
-                    </div>`;
+                    html += buildPriceRowHtml(p, 'selling');
                 });
             } else {
                 html += `<div class="price-empty"><i class="fa fa-tag" style="font-size:1.5em;display:block;margin-bottom:6px;"></i>${TEXT.NO_PRICES}</div>`;
             }
             if (context && context.selling_price_lists.length) {
-                html += `<div class="price-add-row" data-type="selling">
-                    <button type="button" class="items-field-select-btn price-list-select-btn" data-value="" style="width:100%;padding:10px 12px;font-size:0.88em;">
-                        <i class="fa fa-list"></i>
-                        <span class="price-list-select-label">${TEXT.SELECT_PRICE_LIST}</span>
-                        <i class="fa fa-chevron-down"></i>
-                    </button>
-                    <div class="price-add-controls">
-                        <button type="button" class="items-field-select-btn price-uom-add-btn" data-value="" style="min-width:70px;max-width:110px;padding:10px 8px;font-size:0.82em;">
-                            <i class="fa fa-balance-scale"></i>
-                            <span class="price-uom-add-label">${TEXT.SELECT_UOM}</span>
-                        </button>
-                        <input type="text" class="price-add-input" placeholder="0.00" inputmode="decimal">
-                        <button type="button" class="price-add-btn"><i class="fa fa-plus"></i> ${TEXT.ADD_PRICE}</button>
-                    </div>
-                </div>`;
+                html += buildAddPriceRowHtml('selling');
             }
             html += `</div>`;
 
@@ -955,42 +1053,13 @@ function loadPricesForModal(modal, itemCode) {
                 <div class="price-section-title"><span class="buy-dot"></span> ${TEXT.BUYING_PRICES}</div>`;
             if (data.buying && data.buying.length) {
                 data.buying.forEach(p => {
-                    html += `<div class="price-row">
-                        <div class="price-row-list">${escapeHtml(p.price_list)}</div>
-                        <div class="price-row-controls">
-                            <div class="price-row-inputs">
-                                <button type="button" class="items-field-select-btn price-uom-btn" data-name="${escapeHtml(p.name)}" data-value="${escapeHtml(p.uom || '')}" style="min-width:70px;max-width:110px;padding:6px 8px;font-size:0.78em;">
-                                    <i class="fa fa-balance-scale"></i>
-                                    <span class="price-uom-label">${escapeHtml(p.uom || TEXT.SELECT_UOM)}</span>
-                                </button>
-                                <input type="text" class="price-row-input" value="${formatPrice(p.price_list_rate)}" data-name="${escapeHtml(p.name)}" inputmode="decimal">
-                            </div>
-                            <div class="price-row-actions">
-                                <button type="button" class="price-row-save" data-name="${escapeHtml(p.name)}"><i class="fa fa-check"></i> ${TEXT.SAVE}</button>
-                                <button type="button" class="price-row-delete" data-name="${escapeHtml(p.name)}" title="${TEXT.DELETE_PRICE}"><i class="fa fa-trash"></i> ${TEXT.DELETE_PRICE}</button>
-                            </div>
-                        </div>
-                    </div>`;
+                    html += buildPriceRowHtml(p, 'buying');
                 });
             } else {
                 html += `<div class="price-empty"><i class="fa fa-tag" style="font-size:1.5em;display:block;margin-bottom:6px;"></i>${TEXT.NO_PRICES}</div>`;
             }
             if (context && context.buying_price_lists.length) {
-                html += `<div class="price-add-row" data-type="buying">
-                    <button type="button" class="items-field-select-btn price-list-select-btn" data-value="" style="width:100%;padding:10px 12px;font-size:0.88em;">
-                        <i class="fa fa-list"></i>
-                        <span class="price-list-select-label">${TEXT.SELECT_PRICE_LIST}</span>
-                        <i class="fa fa-chevron-down"></i>
-                    </button>
-                    <div class="price-add-controls">
-                        <button type="button" class="items-field-select-btn price-uom-add-btn" data-value="" style="min-width:70px;max-width:110px;padding:10px 8px;font-size:0.82em;">
-                            <i class="fa fa-balance-scale"></i>
-                            <span class="price-uom-add-label">${TEXT.SELECT_UOM}</span>
-                        </button>
-                        <input type="text" class="price-add-input" placeholder="0.00" inputmode="decimal">
-                        <button type="button" class="price-add-btn"><i class="fa fa-plus"></i> ${TEXT.ADD_PRICE}</button>
-                    </div>
-                </div>`;
+                html += buildAddPriceRowHtml('buying');
             }
             html += `</div>`;
 

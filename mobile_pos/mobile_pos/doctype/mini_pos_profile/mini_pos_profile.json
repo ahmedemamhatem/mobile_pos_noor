@@ -18,6 +18,7 @@
   "allow_to_add_customer",
   "allow_to_edit_item_price",
   "allow_draft_invoices",
+  "allow_edit_posting_date",
   "section_break_shareholders",
   "enable_profit_sharing",
   "shareholders"
@@ -103,6 +104,12 @@
   },
   {
    "default": "0",
+   "fieldname": "allow_edit_posting_date",
+   "fieldtype": "Check",
+   "label": "Allow Edit Posting Date"
+  },
+  {
+   "default": "0",
    "fieldname": "disabled",
    "fieldtype": "Check",
    "label": "Dsabled"
@@ -156,7 +163,7 @@
    "link_fieldname": "mini_pos_profile"
   }
  ],
- "modified": "2025-12-08 08:15:33.791851",
+ "modified": "2026-03-10 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Mobile Pos",
  "name": "Mini POS Profile",

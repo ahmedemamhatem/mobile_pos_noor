@@ -652,7 +652,7 @@ def _generate_custom_hash():
     return f"{random_5digit}-{date_str}-{time_str}"
 
 
-def _create_payment_entry(profile, customer, company, mode_of_payment, total_payment, custom_hash, profile_name_override=None):
+def _create_payment_entry(profile, customer, company, mode_of_payment, total_payment, custom_hash, profile_name_override=None, posting_date=None):
     """Create and submit a Payment Entry for the given amount.
 
     Args:
@@ -681,18 +681,20 @@ def _create_payment_entry(profile, customer, company, mode_of_payment, total_pay
     if not paid_from_account:
         frappe.throw(f"No Default Receivable Account set for company '{company}'")
 
+    pe_posting_date = posting_date or frappe.utils.nowdate()
     pe_dict = {
         "doctype": "Payment Entry",
         "payment_type": "Receive",
         "party_type": "Customer",
         "party": customer,
         "company": company,
+        "posting_date": pe_posting_date,
         "paid_from": paid_from_account,
         "paid_to": paid_to_account,
         "paid_amount": total_payment,
         "received_amount": total_payment,
         "reference_no": custom_hash,
-        "reference_date": frappe.utils.nowdate(),
+        "reference_date": pe_posting_date,
         "mode_of_payment": mode_of_payment,
         "custom_hash": custom_hash,
         "custom_mini_pos_profile": profile_name_override or profile.name,
@@ -721,6 +723,13 @@ def mini_pos_create_invoice(data):
     apply_discount_on = data.get("apply_discount_on") or "Grand Total"
     paid_amount = float(data.get("paid_amount") or 0)
     overpayment_amount = float(data.get("overpayment_amount") or 0)
+    posting_date = data.get("posting_date")
+
+    # Only allow custom posting_date if profile has allow_edit_posting_date enabled
+    if posting_date and not profile.get("allow_edit_posting_date"):
+        posting_date = None
+    if not posting_date:
+        posting_date = frappe.utils.nowdate()
 
     if not customer or not items:
         frappe.throw("Customer and items are required.")
@@ -800,7 +809,8 @@ def mini_pos_create_invoice(data):
     if not save_as_draft:
         payment_entry_name = _create_payment_entry(
             profile, customer, company, mode_of_payment, total_payment, custom_hash,
-            profile_name_override=invoice_profile_name if is_admin else None
+            profile_name_override=invoice_profile_name if is_admin else None,
+            posting_date=posting_date
         )
 
     # --- STEP 2: Create Invoice ---
@@ -808,6 +818,8 @@ def mini_pos_create_invoice(data):
         "doctype": "Sales Invoice",
         "customer": customer,
         "company": company,
+        "posting_date": posting_date,
+        "set_posting_time": 1,
         "is_pos": 0,
         "update_stock": 1,
         "disable_rounded_total": 1,
@@ -923,6 +935,9 @@ def mini_pos_get_draft_invoice(invoice_name):
         frappe.throw(_("Only draft invoices can be loaded."))
     if doc.company != profile.company:
         frappe.throw(_("You don't have access to this invoice."))
+    doc_profile = doc.get("mini_pos_profile") or doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name and not _is_pos_admin():
+        frappe.throw(_("You don't have access to this invoice."))
 
     items = []
     for item in doc.items:
@@ -961,6 +976,9 @@ def mini_pos_update_draft_invoice(invoice_name, data):
     if doc.docstatus != 0:
         frappe.throw(_("Only draft invoices can be edited."))
     if doc.company != profile.company:
+        frappe.throw(_("You don't have access to this invoice."))
+    doc_profile = doc.get("mini_pos_profile") or doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name and not _is_pos_admin():
         frappe.throw(_("You don't have access to this invoice."))
 
     # Update customer if provided
@@ -1047,6 +1065,9 @@ def mini_pos_submit_draft_invoice(invoice_name, data=None):
         frappe.throw(_("Only draft invoices can be submitted."))
     if doc.company != profile.company:
         frappe.throw(_("You don't have access to this invoice."))
+    doc_profile = doc.get("mini_pos_profile") or doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name and not _is_pos_admin():
+        frappe.throw(_("You don't have access to this invoice."))
 
     company = profile.company
     customer = doc.customer
@@ -1101,11 +1122,116 @@ def mini_pos_delete_draft_invoice(invoice_name):
         frappe.throw(_("Only draft invoices can be deleted."))
     if doc.company != profile.company:
         frappe.throw(_("You don't have access to this invoice."))
+    doc_profile = doc.get("mini_pos_profile") or doc.get("custom_mini_pos_profile")
+    if doc_profile and doc_profile != profile.name and not _is_pos_admin():
+        frappe.throw(_("You don't have access to this invoice."))
 
     frappe.delete_doc("Sales Invoice", invoice_name, ignore_permissions=True)
     frappe.db.commit()
 
     return {"success": True, "message": _("Draft invoice {0} deleted.").format(invoice_name)}
+
+
+@frappe.whitelist()
+def mini_pos_transfer_draft_stock():
+    """Aggregate all items from draft invoices for this profile and create
+    a Material Transfer Stock Entry from the main warehouse to the POS warehouse."""
+    profile = get_profile_or_throw()
+    company = profile.company
+    target_warehouse = profile.warehouse
+
+    if not target_warehouse:
+        return {"success": False, "message": "لم يتم تحديد مستودع في ملف POS"}
+
+    # Get main warehouse from Mobile POS Settings
+    from mobile_pos.mobile_pos.doctype.mobile_pos_settings.mobile_pos_settings import get_mobile_pos_settings
+    settings = get_mobile_pos_settings(company)
+    source_warehouse = settings.main_warehouse
+
+    if not source_warehouse:
+        return {"success": False, "message": "الرجاء تحديد المستودع الرئيسي في إعدادات Mobile POS"}
+
+    if source_warehouse == target_warehouse:
+        return {"success": False, "message": "المستودع الرئيسي والمستودع المستهدف متطابقان"}
+
+    # Build filters for draft invoices belonging to this profile
+    filters = {
+        "company": company,
+        "docstatus": 0,
+        "is_return": 0
+    }
+    if frappe.get_meta("Sales Invoice").has_field("mini_pos_profile"):
+        filters["mini_pos_profile"] = profile.name
+    else:
+        filters["custom_mini_pos_profile"] = profile.name
+
+    draft_invoices = frappe.get_all("Sales Invoice", filters=filters, pluck="name")
+
+    if not draft_invoices:
+        return {"success": False, "message": "لا توجد مسودات فواتير"}
+
+    # Aggregate items across all drafts
+    items_agg = {}
+    for inv_name in draft_invoices:
+        inv_items = frappe.get_all(
+            "Sales Invoice Item",
+            filters={"parent": inv_name},
+            fields=["item_code", "item_name", "stock_qty", "stock_uom"]
+        )
+        for item in inv_items:
+            key = item.item_code
+            if key in items_agg:
+                items_agg[key]["qty"] += float(item.stock_qty or 0)
+            else:
+                items_agg[key] = {
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "qty": float(item.stock_qty or 0),
+                    "uom": item.stock_uom
+                }
+
+    if not items_agg:
+        return {"success": False, "message": "لا توجد أصناف في المسودات"}
+
+    # Create Stock Entry (Material Transfer) as draft
+    stock_entry = frappe.new_doc("Stock Entry")
+    stock_entry.stock_entry_type = "Material Transfer"
+    stock_entry.company = company
+    stock_entry.posting_date = frappe.utils.nowdate()
+    stock_entry.set_posting_time = 1
+
+    # Set transfer_type and mini_pos_profile if fields exist
+    if frappe.get_meta("Stock Entry").has_field("transfer_type"):
+        stock_entry.transfer_type = "تحميل"
+    if frappe.get_meta("Stock Entry").has_field("mini_pos_profile"):
+        stock_entry.mini_pos_profile = profile.name
+
+    for item_data in items_agg.values():
+        if item_data["qty"] <= 0:
+            continue
+        stock_entry.append("items", {
+            "item_code": item_data["item_code"],
+            "qty": item_data["qty"],
+            "s_warehouse": source_warehouse,
+            "t_warehouse": target_warehouse,
+            "uom": item_data["uom"]
+        })
+
+    if not stock_entry.items:
+        return {"success": False, "message": "لا توجد أصناف بكمية صالحة للتحويل"}
+
+    stock_entry.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "success": True,
+        "message": f"تم إنشاء حركة مخزون (مسودة): {stock_entry.name}",
+        "stock_entry": stock_entry.name,
+        "items_count": len(stock_entry.items),
+        "drafts_count": len(draft_invoices),
+        "source_warehouse": source_warehouse,
+        "target_warehouse": target_warehouse
+    }
 
 
 @frappe.whitelist()

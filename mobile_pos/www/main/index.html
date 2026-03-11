@@ -778,6 +778,33 @@ border-color:var(--primary);
   box-shadow:0 25px 60px rgba(249,115,22,0.4), 0 10px 25px rgba(249,115,22,0.25), 0 0 40px rgba(249,115,22,0.2);
 }
 
+.act-customers{
+  background:linear-gradient(135deg,#14b8a6 0%,#0d9488 50%,#0f766e 100%);
+  border:1px solid rgba(20,184,166,0.4);
+}
+
+.act-customers:hover{
+  box-shadow:0 25px 60px rgba(20,184,166,0.4), 0 10px 25px rgba(20,184,166,0.25), 0 0 40px rgba(20,184,166,0.2);
+}
+
+.act-suppliers{
+  background:linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%);
+  border:1px solid rgba(245,158,11,0.4);
+}
+
+.act-suppliers:hover{
+  box-shadow:0 25px 60px rgba(245,158,11,0.4), 0 10px 25px rgba(245,158,11,0.25), 0 0 40px rgba(245,158,11,0.2);
+}
+
+.act-mop{
+  background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 50%,#0369a1 100%);
+  border:1px solid rgba(14,165,233,0.4);
+}
+
+.act-mop:hover{
+  box-shadow:0 25px 60px rgba(14,165,233,0.4), 0 10px 25px rgba(14,165,233,0.25), 0 0 40px rgba(14,165,233,0.2);
+}
+
 .disabled .action{
   filter:grayscale(.85) opacity(.65);
   pointer-events:none;
@@ -1754,6 +1781,48 @@ input:focus,button:focus{
         <i class="fa fa-chevron-left"></i>
       </div>
     </a>
+    <a id="link-customers" class="action act-customers hidden" href="/app/customers">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-users" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">إدارة العملاء</h3>
+          <p class="action-desc">عرض وإضافة وتعديل بيانات العملاء</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
+    <a id="link-suppliers" class="action act-suppliers hidden" href="/app/suppliers">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-truck" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">إدارة الموردين</h3>
+          <p class="action-desc">عرض وإضافة وتعديل بيانات الموردين</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
+    <a id="link-mop" class="action act-mop hidden" href="/app/mop-balance">
+      <div class="action-content">
+        <div class="action-icon-wrapper">
+          <i class="fa fa-credit-card" style="font-size:28px;color:white;"></i>
+        </div>
+        <div class="action-text">
+          <h3 class="action-title">أرصدة الخزن</h3>
+          <p class="action-desc">عرض أرصدة جميع الخزن</p>
+        </div>
+      </div>
+      <div class="action-arrow">
+        <i class="fa fa-chevron-left"></i>
+      </div>
+    </a>
   </div>
 
   <div id="login-prompt-section" class="login-prompt hidden">
@@ -1909,7 +1978,10 @@ const linkPayment=$("link-payment");
 const linkExpense=$("link-expense");
 const linkPurchase=$("link-purchase");
 const linkItems=$("link-items");
+const linkMop=$("link-mop");
 const linkTransfers=$("link-transfers");
+const linkCustomers=$("link-customers");
+const linkSuppliers=$("link-suppliers");
 const userInfoGrid=$("user-info-grid");
 
 // PWA Install functionality
@@ -2174,12 +2246,15 @@ if (isAdmin) {
   // Show admin link
   linkAdmin.classList.remove("hidden");
 
-  // Show payment, expense, purchase, items, and transfers links for admin
+  // Show payment, expense, purchase, items, mop, and transfers links for admin
   if (linkPayment) linkPayment.classList.remove("hidden");
   if (linkExpense) linkExpense.classList.remove("hidden");
   if (linkPurchase) linkPurchase.classList.remove("hidden");
   if (linkItems) linkItems.classList.remove("hidden");
+  if (linkMop) linkMop.classList.remove("hidden");
   if (linkTransfers) linkTransfers.classList.remove("hidden");
+  if (linkCustomers) linkCustomers.classList.remove("hidden");
+  if (linkSuppliers) linkSuppliers.classList.remove("hidden");
 
   // Show POS for admin, hide Stock
   if (linkPos) linkPos.classList.remove("hidden");
@@ -2210,23 +2285,25 @@ if (isAdmin) {
 } else if (isSystemUser) {
   console.log("System User - showing System button");
 
-  // Hide admin, payment, expense, items links
+  // Hide admin, payment, expense, items, mop links
   linkAdmin.classList.add("hidden");
   if (linkPayment) linkPayment.classList.add("hidden");
   if (linkExpense) linkExpense.classList.add("hidden");
   if (linkItems) linkItems.classList.add("hidden");
+  if (linkMop) linkMop.classList.add("hidden");
   if (linkTransfers) linkTransfers.classList.add("hidden");
+  if (linkCustomers) linkCustomers.classList.add("hidden");
+  if (linkSuppliers) linkSuppliers.classList.add("hidden");
 
   // Show main system button
   mainSystemBtn.classList.remove("hidden");
 
   // Show POS and Stock if has profile
   if (hasProfile) {
-    console.log("System User with profile - showing POS, Stock, Items and Transfers");
+    console.log("System User with profile - showing POS, Stock, Customers");
     if (linkPos) linkPos.classList.remove("hidden");
     if (linkTruck) linkTruck.classList.remove("hidden");
-    if (linkItems) linkItems.classList.remove("hidden");
-    if (linkTransfers) linkTransfers.classList.remove("hidden");
+    if (linkCustomers) linkCustomers.classList.remove("hidden");
     actions.classList.remove("hidden");
     actions.classList.remove("blurred");
     disableActions(false);
@@ -2246,20 +2323,22 @@ if (isAdmin) {
 } else if (isWebsiteUser) {
   console.log("Website User");
 
-  // Hide admin, payment, expense, items links and system button
+  // Hide admin, payment, expense, items, mop links and system button
   linkAdmin.classList.add("hidden");
   if (linkPayment) linkPayment.classList.add("hidden");
   if (linkExpense) linkExpense.classList.add("hidden");
   if (linkItems) linkItems.classList.add("hidden");
+  if (linkMop) linkMop.classList.add("hidden");
   if (linkTransfers) linkTransfers.classList.add("hidden");
+  if (linkCustomers) linkCustomers.classList.add("hidden");
+  if (linkSuppliers) linkSuppliers.classList.add("hidden");
   mainSystemBtn.classList.add("hidden");
 
   if (hasProfile) {
-    console.log("Website User with profile - showing POS, Stock, Items and Transfers");
+    console.log("Website User with profile - showing POS, Stock, Customers");
     if (linkPos) linkPos.classList.remove("hidden");
     if (linkTruck) linkTruck.classList.remove("hidden");
-    if (linkItems) linkItems.classList.remove("hidden");
-    if (linkTransfers) linkTransfers.classList.remove("hidden");
+    if (linkCustomers) linkCustomers.classList.remove("hidden");
     actions.classList.remove("hidden");
     actions.classList.remove("blurred");
     disableActions(false);
@@ -2279,6 +2358,9 @@ if (isAdmin) {
   if (linkPayment) linkPayment.classList.add("hidden");
   if (linkExpense) linkExpense.classList.add("hidden");
   if (linkItems) linkItems.classList.add("hidden");
+  if (linkMop) linkMop.classList.add("hidden");
+  if (linkCustomers) linkCustomers.classList.add("hidden");
+  if (linkSuppliers) linkSuppliers.classList.add("hidden");
   if (linkTransfers) linkTransfers.classList.add("hidden");
   mainSystemBtn.classList.add("hidden");
   actions.classList.add("hidden");

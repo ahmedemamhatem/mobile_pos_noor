@@ -824,6 +824,25 @@ frappe.pages["transfer-entries"].on_page_load = async function(wrapper) {
       .te-wh-flow { margin: 0 12px; }
       .te-item-details { grid-template-columns: 1fr 1fr; }
     }
+    /* Custom confirm overlay - above detail popup */
+    .te-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:100002;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:teConfirmIn 0.2s ease-out;}
+    @keyframes teConfirmIn{0%{opacity:0}100%{opacity:1}}
+    .te-confirm-box{background:#fff;border-radius:22px;max-width:400px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;animation:teConfirmBoxIn 0.25s ease-out;}
+    @keyframes teConfirmBoxIn{0%{opacity:0;transform:scale(0.9) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+    .te-confirm-header{padding:28px 24px 16px;text-align:center;}
+    .te-confirm-header i{font-size:2.5em;width:64px;height:64px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;margin-bottom:12px;}
+    .te-confirm-header.warn i{color:#f59e0b;background:#fef3c7;}
+    .te-confirm-header.danger i{color:#ef4444;background:#fee2e2;}
+    .te-confirm-header.success i{color:#10b981;background:#dcfce7;}
+    .te-confirm-msg{text-align:center;padding:0 24px 24px;font-size:1.05em;font-weight:700;color:#1e293b;line-height:1.6;direction:rtl;}
+    .te-confirm-actions{display:flex;gap:10px;padding:0 24px 24px;justify-content:center;}
+    .te-confirm-btn{flex:1;padding:14px 16px;border:none;border-radius:14px;font-size:1em;font-weight:700;cursor:pointer;transition:all 0.2s;}
+    .te-confirm-btn.cancel{background:#f1f5f9;color:#64748b;}
+    .te-confirm-btn.cancel:hover{background:#e2e8f0;color:#334155;}
+    .te-confirm-btn.ok{color:#fff;}
+    .te-confirm-btn.ok.danger{background:linear-gradient(135deg,#ef4444,#dc2626);}
+    .te-confirm-btn.ok.success{background:linear-gradient(135deg,#10b981,#059669);}
+    .te-confirm-btn.ok.warn{background:linear-gradient(135deg,#f59e0b,#d97706);}
   </style>`;
 
   // ── HTML Structure ──
@@ -1121,9 +1140,7 @@ frappe.pages["transfer-entries"].on_page_load = async function(wrapper) {
   }
 
   async function submitAllDrafts() {
-    const confirmed = await new Promise(resolve => {
-      frappe.confirm(TEXT.CONFIRM_SUBMIT_ALL, () => resolve(true), () => resolve(false));
-    });
+    const confirmed = await teConfirm(TEXT.CONFIRM_SUBMIT_ALL, 'success');
     if (!confirmed) return;
 
     const btn = $('#te-submit-all-btn');
@@ -1402,6 +1419,28 @@ frappe.pages["transfer-entries"].on_page_load = async function(wrapper) {
     }
   }
 
+  // Custom confirm that appears above the detail popup
+  function teConfirm(message, type) {
+    type = type || 'warn';
+    let iconMap = {warn:'fa-exclamation-triangle', danger:'fa-trash', success:'fa-check-circle'};
+    return new Promise(function(resolve) {
+      let overlay = $(`<div class="te-confirm-overlay">
+        <div class="te-confirm-box">
+          <div class="te-confirm-header ${type}"><i class="fa ${iconMap[type] || iconMap.warn}"></i></div>
+          <div class="te-confirm-msg">${message}</div>
+          <div class="te-confirm-actions">
+            <button type="button" class="te-confirm-btn ok ${type}">نعم</button>
+            <button type="button" class="te-confirm-btn cancel">إلغاء</button>
+          </div>
+        </div>
+      </div>`);
+      $('body').append(overlay);
+      overlay.on('click', '.te-confirm-btn.ok', function() { overlay.remove(); resolve(true); });
+      overlay.on('click', '.te-confirm-btn.cancel', function() { overlay.remove(); resolve(false); });
+      overlay.on('click', function(e) { if ($(e.target).hasClass('te-confirm-overlay')) { overlay.remove(); resolve(false); } });
+    });
+  }
+
   function closePopup() {
     $('#te-overlay').removeClass('open');
     currentDetailEntry = null;
@@ -1409,9 +1448,7 @@ frappe.pages["transfer-entries"].on_page_load = async function(wrapper) {
 
   // ── Actions ──
   async function submitEntry(name) {
-    const confirmed = await new Promise(resolve => {
-      frappe.confirm(TEXT.CONFIRM_SUBMIT, () => resolve(true), () => resolve(false));
-    });
+    const confirmed = await teConfirm(TEXT.CONFIRM_SUBMIT, 'success');
     if (!confirmed) return;
 
     $('#te-btn-submit').prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i>`);
@@ -1427,9 +1464,7 @@ frappe.pages["transfer-entries"].on_page_load = async function(wrapper) {
   }
 
   async function cancelEntry(name) {
-    const confirmed = await new Promise(resolve => {
-      frappe.confirm(TEXT.CONFIRM_CANCEL, () => resolve(true), () => resolve(false));
-    });
+    const confirmed = await teConfirm(TEXT.CONFIRM_CANCEL, 'danger');
     if (!confirmed) return;
 
     $('#te-btn-cancel-entry').prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i>`);
@@ -1445,9 +1480,7 @@ frappe.pages["transfer-entries"].on_page_load = async function(wrapper) {
   }
 
   async function deleteEntry(name) {
-    const confirmed = await new Promise(resolve => {
-      frappe.confirm(TEXT.CONFIRM_DELETE, () => resolve(true), () => resolve(false));
-    });
+    const confirmed = await teConfirm(TEXT.CONFIRM_DELETE, 'danger');
     if (!confirmed) return;
 
     $('#te-btn-delete').prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i>`);

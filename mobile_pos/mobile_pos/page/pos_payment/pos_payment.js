@@ -363,7 +363,7 @@ $(wrapper).html(`
 .modal-backdrop{z-index:10000!important;}
 .modal{z-index:10001!important;}
 /* Custom confirm overlay */
-.pe-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:peConfirmIn 0.2s ease-out;}
+.pe-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:100002;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:peConfirmIn 0.2s ease-out;}
 @keyframes peConfirmIn{0%{opacity:0}100%{opacity:1}}
 .pe-confirm-box{background:#fff;border-radius:22px;max-width:400px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;animation:peConfirmBoxIn 0.25s ease-out;}
 @keyframes peConfirmBoxIn{0%{opacity:0;transform:scale(0.9) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
@@ -383,6 +383,19 @@ $(wrapper).html(`
 .pe-confirm-btn.ok.warn{background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 14px rgba(245,158,11,0.3);}
 </style>
 `);
+
+// Inject z-index overrides into <head> to ensure they're global
+if (!document.getElementById('pe-zindex-styles')) {
+    let styleEl = document.createElement('style');
+    styleEl.id = 'pe-zindex-styles';
+    styleEl.textContent = `
+        .pe-confirm-overlay{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;background:rgba(0,0,0,0.6)!important;z-index:100002!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:20px!important;}
+        .pe-detail-overlay{z-index:9999!important;}
+        .modal-backdrop{z-index:10000!important;}
+        .modal{z-index:10001!important;}
+    `;
+    document.head.appendChild(styleEl);
+}
 
 function convertArabicToEnglishNumbers(str) {
     if (!str) return str;

@@ -91,12 +91,32 @@ def get_items_context(search="", limit=100, offset=0):
         count_filters["item_name"] = ["like", f"%{search}%"]
     total_count = frappe.db.count("Item", filters=count_filters)
 
+    customers = frappe.get_all(
+        "Customer",
+        filters={"disabled": 0},
+        fields=["name", "customer_name"],
+        order_by="customer_name asc",
+        limit=500,
+        ignore_permissions=True
+    )
+
+    suppliers = frappe.get_all(
+        "Supplier",
+        filters={"disabled": 0},
+        fields=["name", "supplier_name"],
+        order_by="supplier_name asc",
+        limit=500,
+        ignore_permissions=True
+    )
+
     return {
         "items": items,
         "item_groups": [g.name for g in item_groups],
         "uoms": [u.name for u in uoms],
         "selling_price_lists": selling_price_lists,
         "buying_price_lists": buying_price_lists,
+        "customers": customers,
+        "suppliers": suppliers,
         "total_count": total_count
     }
 
@@ -113,7 +133,7 @@ def get_item_prices(item_code):
         fields=[
             "name", "price_list", "price_list_rate",
             "selling", "buying", "currency", "uom",
-            "valid_from", "valid_upto"
+            "valid_from", "valid_upto", "customer", "supplier"
         ],
         order_by="selling desc, buying desc, price_list asc",
         ignore_permissions=True
@@ -240,10 +260,14 @@ def update_item_price(data):
     uom = (data.get("uom") or "").strip()
     if uom:
         doc.uom = uom
+    if "customer" in data:
+        doc.customer = (data.get("customer") or "").strip() or None
+    if "supplier" in data:
+        doc.supplier = (data.get("supplier") or "").strip() or None
     doc.save(ignore_permissions=True)
     frappe.db.commit()
 
-    return {"name": doc.name, "price_list_rate": doc.price_list_rate, "uom": doc.uom}
+    return {"name": doc.name, "price_list_rate": doc.price_list_rate, "uom": doc.uom, "customer": doc.customer, "supplier": doc.supplier}
 
 
 @frappe.whitelist()
@@ -269,12 +293,17 @@ def create_item_price(data):
 
     uom = (data.get("uom") or "").strip() or item.stock_uom
 
+    customer = (data.get("customer") or "").strip() or None
+    supplier = (data.get("supplier") or "").strip() or None
+
     doc = frappe.get_doc({
         "doctype": "Item Price",
         "item_code": item_code,
         "price_list": price_list,
         "price_list_rate": price_list_rate,
         "uom": uom,
+        "customer": customer,
+        "supplier": supplier,
     })
 
     doc.insert(ignore_permissions=True)
@@ -283,7 +312,9 @@ def create_item_price(data):
     return {
         "name": doc.name,
         "price_list": doc.price_list,
-        "price_list_rate": doc.price_list_rate
+        "price_list_rate": doc.price_list_rate,
+        "customer": doc.customer,
+        "supplier": doc.supplier
     }
 
 

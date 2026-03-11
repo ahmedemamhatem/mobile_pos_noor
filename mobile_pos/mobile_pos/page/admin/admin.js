@@ -16,15 +16,6 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
     $(wrapper).find('.layout-main-section').html(`
         <!-- Custom Admin Header -->
         <div class="admin-header">
-            <div class="company-filter">
-                <label for="company-select">
-                    <i class="fa fa-building"></i>
-                    الشركة:
-                </label>
-                <select id="company-select" class="company-select">
-                    <option value="">جاري التحميل...</option>
-                </select>
-            </div>
             <h1 class="admin-title"><i class="fa fa-cogs"></i> لوحة التحكم</h1>
             <div class="header-actions">
                 <button class="header-btn header-btn-refresh" id="btn-refresh" title="تحديث">
@@ -49,310 +40,96 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
-            <!-- Summary Cards Row 1 - Sales & Purchase -->
-            <div class="summary-row">
-                <div class="summary-card sales-card" data-animate="1">
-                    <div class="summary-icon">
-                        <i class="fa fa-shopping-cart"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">إجمالي المبيعات</div>
-                        <div class="summary-value" id="summary-sales">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span id="chip-sales-count">- فاتورة</span>
-                            <span id="chip-sales-outstanding" class="chip-warning">متبقي: -</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-card purchase-card" data-animate="2">
-                    <div class="summary-icon">
-                        <i class="fa fa-shopping-bag"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">إجمالي المشتريات</div>
-                        <div class="summary-value" id="summary-purchase">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span id="chip-purchase-count">- فاتورة</span>
-                            <span id="chip-purchase-outstanding" class="chip-danger">متبقي: -</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-card stock-card" data-animate="3">
-                    <div class="summary-icon">
-                        <i class="fa fa-cubes"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">إجمالي المخزون (تكلفة)</div>
-                        <div class="summary-value" id="summary-stock">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-label" style="margin-top:4px;">إجمالي المخزون (بيع)</div>
-                        <div class="summary-value" id="summary-stock-selling">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span id="chip-items">- أصناف</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-card payment-card" data-animate="4">
-                    <div class="summary-icon">
+            <!-- Payment Section -->
+            <div class="dashboard-section" data-animate="1">
+                <div class="section-header">
+                    <h3 class="section-title">
                         <i class="fa fa-credit-card"></i>
+                        الخزن
+                    </h3>
+                    <div class="section-badge">
+                        <span class="status-dot online"></span>
+                        حتى اليوم
                     </div>
-                    <div class="summary-content">
-                        <div class="summary-label">رصيد الخزن</div>
-                        <div class="summary-value" id="summary-payment">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span id="chip-mop">- خزن</span>
-                        </div>
+                </div>
+
+                <!-- Payment Search -->
+                <div class="section-controls compact">
+                    <div class="search-box">
+                        <i class="fa fa-search"></i>
+                        <input type="text" id="payment-search" placeholder="بحث في الخزن...">
+                        <button class="clear-search" id="clear-payment-search">&times;</button>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-header with-count">
+                        <h4>الرصيد لكل خزنة</h4>
+                        <span class="record-count" id="payment-count">0 خزنة</span>
+                    </div>
+                    <div class="table-container">
+                        <table id="tbl-mop">
+                            <thead>
+                                <tr>
+                                    <th>الخزنة</th>
+                                    <th>الرصيد</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="2" class="empty-row"><span class="skeleton" style="width:200px;height:20px;display:inline-block"></span></td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Summary Cards Row 2 - Customers & Suppliers -->
-            <div class="summary-row">
-                <div class="summary-card customer-card" data-animate="5">
-                    <div class="summary-icon">
-                        <i class="fa fa-users"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">أرصدة العملاء</div>
-                        <div class="summary-value" id="summary-customer">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span id="chip-customers">- عملاء</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-card supplier-card" data-animate="6">
-                    <div class="summary-icon">
-                        <i class="fa fa-truck"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">أرصدة الموردين</div>
-                        <div class="summary-value" id="summary-supplier">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span id="chip-suppliers">- موردين</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-card outstanding-sales-card" data-animate="7">
-                    <div class="summary-icon">
-                        <i class="fa fa-file-text-o"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">متبقي المبيعات</div>
-                        <div class="summary-value" id="summary-outstanding-sales">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span class="chip-info">مستحق التحصيل</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-card outstanding-purchase-card" data-animate="8">
-                    <div class="summary-icon">
-                        <i class="fa fa-file-o"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">متبقي المشتريات</div>
-                        <div class="summary-value" id="summary-outstanding-purchase">
-                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
-                        </div>
-                        <div class="summary-meta">
-                            <span class="chip-danger">مستحق الدفع</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Today Sales & Cash Flow Row -->
-            <div class="section-grid two-cols">
-                <!-- Today's Sales Section -->
-                <div class="dashboard-section" data-animate="9">
-                    <div class="section-header">
-                        <h3 class="section-title">
-                            <i class="fa fa-calendar-check-o"></i>
-                            مبيعات اليوم
-                        </h3>
+            <!-- Stock Section -->
+            <div class="dashboard-section" data-animate="2">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <i class="fa fa-cubes"></i>
+                        المخزون
+                    </h3>
+                    <div class="section-actions">
                         <div class="section-badge">
                             <span class="status-dot online"></span>
-                            مباشر
-                        </div>
-                    </div>
-
-                    <div class="stats-grid">
-                        <div class="stat-card primary">
-                            <div class="stat-icon"><i class="fa fa-money"></i></div>
-                            <div class="stat-content">
-                                <div class="stat-label">إجمالي اليوم</div>
-                                <div class="stat-value" id="today-sales-total">-</div>
-                            </div>
-                        </div>
-                        <div class="stat-card info">
-                            <div class="stat-icon"><i class="fa fa-file-text"></i></div>
-                            <div class="stat-content">
-                                <div class="stat-label">عدد الفواتير</div>
-                                <div class="stat-value" id="today-sales-count">-</div>
-                            </div>
-                        </div>
-                        <div class="stat-card" id="today-change-card">
-                            <div class="stat-icon"><i class="fa fa-line-chart"></i></div>
-                            <div class="stat-content">
-                                <div class="stat-label">مقارنة بالأمس</div>
-                                <div class="stat-value" id="today-sales-change">-</div>
-                            </div>
-                        </div>
-                        <div class="stat-card secondary">
-                            <div class="stat-icon"><i class="fa fa-history"></i></div>
-                            <div class="stat-content">
-                                <div class="stat-label">مبيعات الأمس</div>
-                                <div class="stat-value" id="yesterday-sales-total">-</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="data-card" style="margin-top: 15px;">
-                        <div class="card-header with-count">
-                            <h4><i class="fa fa-star"></i> الأصناف الأكثر مبيعاً اليوم</h4>
-                            <span class="record-count" id="top-items-count">0 أصناف</span>
-                        </div>
-                        <div class="table-container">
-                            <table id="tbl-top-items">
-                                <thead>
-                                    <tr>
-                                        <th>الصنف</th>
-                                        <th>الكمية</th>
-                                        <th>المبلغ</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td colspan="3" class="empty-row"><span class="skeleton" style="width:150px;height:20px;display:inline-block"></span></td></tr>
-                                </tbody>
-                            </table>
+                            حتى اليوم
                         </div>
                     </div>
                 </div>
 
-                <!-- Daily Cash Flow Section -->
-                <div class="dashboard-section" data-animate="10">
-                    <div class="section-header">
-                        <h3 class="section-title">
-                            <i class="fa fa-exchange"></i>
-                            حركة الصندوق اليومية
-                        </h3>
-                        <div class="section-badge">
-                            <span class="status-dot online"></span>
-                            اليوم
-                        </div>
-                    </div>
-
-                    <div class="cash-flow-cards">
-                        <div class="cash-flow-card in">
-                            <div class="cf-icon"><i class="fa fa-arrow-down"></i></div>
-                            <div class="cf-label">الوارد</div>
-                            <div class="cf-value" id="cash-in-total">0</div>
-                        </div>
-                        <div class="cash-flow-card out">
-                            <div class="cf-icon"><i class="fa fa-arrow-up"></i></div>
-                            <div class="cf-label">الصادر</div>
-                            <div class="cf-value" id="cash-out-total">0</div>
-                        </div>
-                        <div class="cash-flow-card net" id="net-flow-card">
-                            <div class="cf-icon"><i class="fa fa-balance-scale"></i></div>
-                            <div class="cf-label">صافي</div>
-                            <div class="cf-value" id="net-flow-value">0</div>
-                        </div>
+                <!-- Stock Controls -->
+                <div class="section-controls compact">
+                    <div class="search-box">
+                        <i class="fa fa-search"></i>
+                        <input type="text" id="stock-search" placeholder="بحث في الأصناف...">
+                        <button class="clear-search" id="clear-stock-search">&times;</button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Sales Performance & Sales by Profile Row -->
-            <div class="section-grid two-cols">
-                <!-- Sales Performance Section -->
-                <div class="dashboard-section" data-animate="11">
-                    <div class="section-header">
-                        <h3 class="section-title">
-                            <i class="fa fa-bar-chart"></i>
-                            أداء المبيعات
-                        </h3>
-                        <div class="section-badge">هذا الشهر</div>
+                <div class="data-card">
+                    <div class="card-header with-count">
+                        <h4 id="stock-table-title">أرصدة الأصناف</h4>
+                        <span class="record-count" id="stock-count">0 صنف</span>
                     </div>
-
-                    <div class="perf-cards">
-                        <div class="perf-card current">
-                            <div class="pf-icon"><i class="fa fa-calendar-check-o"></i></div>
-                            <div class="pf-label">الشهر الحالي</div>
-                            <div class="pf-value" id="perf-this-month">0</div>
-                        </div>
-                        <div class="perf-card last">
-                            <div class="pf-icon"><i class="fa fa-calendar-o"></i></div>
-                            <div class="pf-label">الشهر الماضي</div>
-                            <div class="pf-value" id="perf-last-month">0</div>
-                        </div>
-                        <div class="perf-card change" id="perf-change-card">
-                            <div class="pf-icon"><i class="fa fa-percent"></i></div>
-                            <div class="pf-label">التغيير</div>
-                            <div class="pf-value" id="perf-change-value">0%</div>
-                        </div>
-                    </div>
-
-                    <div id="weekly-trend" class="weekly-trend-container" style="margin-top: 12px;"></div>
-
-                </div>
-
-                <!-- Sales by Profile Section -->
-                <div class="dashboard-section" data-animate="12">
-                    <div class="section-header">
-                        <h3 class="section-title">
-                            <i class="fa fa-users"></i>
-                            مبيعات الموزعين
-                        </h3>
-                        <div class="section-badge" id="profile-sales-period">هذا الشهر</div>
-                    </div>
-
-                    <div class="section-controls compact">
-                        <div class="search-box">
-                            <i class="fa fa-search"></i>
-                            <input type="text" id="profile-sales-search" placeholder="بحث في الموزعين...">
-                            <button class="clear-search" id="clear-profile-sales-search">&times;</button>
-                        </div>
-                    </div>
-
-                    <div class="data-card">
-                        <div class="card-header with-count">
-                            <h4>المبيعات حسب الموزع</h4>
-                            <span class="record-count" id="profile-sales-count">0 موزع</span>
-                        </div>
-                        <div class="table-container">
-                            <table id="tbl-profile-sales">
-                                <thead>
-                                    <tr>
-                                        <th>الموزع</th>
-                                        <th>المبيعات</th>
-                                        <th>النسبة</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td colspan="3" class="empty-row"><span class="skeleton" style="width:150px;height:20px;display:inline-block"></span></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="table-container">
+                        <table id="tbl-stock">
+                            <thead>
+                                <tr>
+                                    <th>الصنف</th>
+                                    <th>الرصيد</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="2" class="empty-row"><span class="skeleton" style="width:200px;height:20px;display:inline-block"></span></td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
             <!-- Low Stock Section -->
-            <div class="dashboard-section" data-animate="13">
+            <div class="dashboard-section" data-animate="3">
                 <div class="section-header">
                     <h3 class="section-title">
                         <i class="fa fa-exclamation-triangle"></i>
@@ -448,98 +225,10 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
-            <!-- Stock Section -->
-            <div class="dashboard-section" data-animate="14">
-                <div class="section-header">
-                    <h3 class="section-title">
-                        <i class="fa fa-cubes"></i>
-                        المخزون
-                    </h3>
-                    <div class="section-actions">
-                        <div class="section-badge">
-                            <span class="status-dot online"></span>
-                            حتى اليوم
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stock Controls -->
-                <div class="section-controls compact">
-                    <div class="search-box">
-                        <i class="fa fa-search"></i>
-                        <input type="text" id="stock-search" placeholder="بحث في الأصناف...">
-                        <button class="clear-search" id="clear-stock-search">&times;</button>
-                    </div>
-                </div>
-
-                <div class="data-card">
-                    <div class="card-header with-count">
-                        <h4 id="stock-table-title">أرصدة الأصناف</h4>
-                        <span class="record-count" id="stock-count">0 صنف</span>
-                    </div>
-                    <div class="table-container">
-                        <table id="tbl-stock">
-                            <thead>
-                                <tr>
-                                    <th>الصنف</th>
-                                    <th>الرصيد</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="2" class="empty-row"><span class="skeleton" style="width:200px;height:20px;display:inline-block"></span></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Payment Section -->
-            <div class="dashboard-section" data-animate="15">
-                <div class="section-header">
-                    <h3 class="section-title">
-                        <i class="fa fa-credit-card"></i>
-                        الخزن
-                    </h3>
-                    <div class="section-badge">
-                        <span class="status-dot online"></span>
-                        حتى اليوم
-                    </div>
-                </div>
-
-                <!-- Payment Search -->
-                <div class="section-controls compact">
-                    <div class="search-box">
-                        <i class="fa fa-search"></i>
-                        <input type="text" id="payment-search" placeholder="بحث في الخزن...">
-                        <button class="clear-search" id="clear-payment-search">&times;</button>
-                    </div>
-                </div>
-
-                <div class="data-card">
-                    <div class="card-header with-count">
-                        <h4>الرصيد لكل خزنة</h4>
-                        <span class="record-count" id="payment-count">0 خزنة</span>
-                    </div>
-                    <div class="table-container">
-                        <table id="tbl-mop">
-                            <thead>
-                                <tr>
-                                    <th>الخزنة</th>
-                                    <th>الرصيد</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="2" class="empty-row"><span class="skeleton" style="width:200px;height:20px;display:inline-block"></span></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
             <!-- Customers & Suppliers Row -->
             <div class="section-grid two-cols">
                 <!-- Customers Section -->
-                <div class="dashboard-section" data-animate="16">
+                <div class="dashboard-section" data-animate="4">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-users"></i>
@@ -597,7 +286,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
 
                 <!-- Suppliers Section -->
-                <div class="dashboard-section" data-animate="17">
+                <div class="dashboard-section" data-animate="5">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-truck"></i>
@@ -653,8 +342,184 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
             </div>
 
+            <!-- Today Sales & Cash Flow Row -->
+            <div class="section-grid two-cols">
+                <!-- Today's Sales Section -->
+                <div class="dashboard-section" data-animate="6">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fa fa-calendar-check-o"></i>
+                            مبيعات اليوم
+                        </h3>
+                        <div class="section-badge">
+                            <span class="status-dot online"></span>
+                            مباشر
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card primary">
+                            <div class="stat-icon"><i class="fa fa-money"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-label">إجمالي اليوم</div>
+                                <div class="stat-value" id="today-sales-total">-</div>
+                            </div>
+                        </div>
+                        <div class="stat-card info">
+                            <div class="stat-icon"><i class="fa fa-file-text"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-label">عدد الفواتير</div>
+                                <div class="stat-value" id="today-sales-count">-</div>
+                            </div>
+                        </div>
+                        <div class="stat-card" id="today-change-card">
+                            <div class="stat-icon"><i class="fa fa-line-chart"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-label">مقارنة بالأمس</div>
+                                <div class="stat-value" id="today-sales-change">-</div>
+                            </div>
+                        </div>
+                        <div class="stat-card secondary">
+                            <div class="stat-icon"><i class="fa fa-history"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-label">مبيعات الأمس</div>
+                                <div class="stat-value" id="yesterday-sales-total">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="data-card" style="margin-top: 15px;">
+                        <div class="card-header with-count">
+                            <h4><i class="fa fa-star"></i> الأصناف الأكثر مبيعاً اليوم</h4>
+                            <span class="record-count" id="top-items-count">0 أصناف</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="tbl-top-items">
+                                <thead>
+                                    <tr>
+                                        <th>الصنف</th>
+                                        <th>الكمية</th>
+                                        <th>المبلغ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="3" class="empty-row"><span class="skeleton" style="width:150px;height:20px;display:inline-block"></span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Cash Flow Section -->
+                <div class="dashboard-section" data-animate="7">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fa fa-exchange"></i>
+                            حركة الصندوق اليومية
+                        </h3>
+                        <div class="section-badge">
+                            <span class="status-dot online"></span>
+                            اليوم
+                        </div>
+                    </div>
+
+                    <div class="cash-flow-cards">
+                        <div class="cash-flow-card in">
+                            <div class="cf-icon"><i class="fa fa-arrow-down"></i></div>
+                            <div class="cf-label">الوارد</div>
+                            <div class="cf-value" id="cash-in-total">0</div>
+                        </div>
+                        <div class="cash-flow-card out">
+                            <div class="cf-icon"><i class="fa fa-arrow-up"></i></div>
+                            <div class="cf-label">الصادر</div>
+                            <div class="cf-value" id="cash-out-total">0</div>
+                        </div>
+                        <div class="cash-flow-card net" id="net-flow-card">
+                            <div class="cf-icon"><i class="fa fa-balance-scale"></i></div>
+                            <div class="cf-label">صافي</div>
+                            <div class="cf-value" id="net-flow-value">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Performance & Sales by Profile Row -->
+            <div class="section-grid two-cols">
+                <!-- Sales Performance Section -->
+                <div class="dashboard-section" data-animate="8">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fa fa-bar-chart"></i>
+                            أداء المبيعات
+                        </h3>
+                        <div class="section-badge">هذا الشهر</div>
+                    </div>
+
+                    <div class="perf-cards">
+                        <div class="perf-card current">
+                            <div class="pf-icon"><i class="fa fa-calendar-check-o"></i></div>
+                            <div class="pf-label">الشهر الحالي</div>
+                            <div class="pf-value" id="perf-this-month">0</div>
+                        </div>
+                        <div class="perf-card last">
+                            <div class="pf-icon"><i class="fa fa-calendar-o"></i></div>
+                            <div class="pf-label">الشهر الماضي</div>
+                            <div class="pf-value" id="perf-last-month">0</div>
+                        </div>
+                        <div class="perf-card change" id="perf-change-card">
+                            <div class="pf-icon"><i class="fa fa-percent"></i></div>
+                            <div class="pf-label">التغيير</div>
+                            <div class="pf-value" id="perf-change-value">0%</div>
+                        </div>
+                    </div>
+
+                    <div id="weekly-trend" class="weekly-trend-container" style="margin-top: 12px;"></div>
+
+                </div>
+
+                <!-- Sales by Profile Section -->
+                <div class="dashboard-section" data-animate="9">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fa fa-users"></i>
+                            مبيعات الموزعين
+                        </h3>
+                        <div class="section-badge" id="profile-sales-period">هذا الشهر</div>
+                    </div>
+
+                    <div class="section-controls compact">
+                        <div class="search-box">
+                            <i class="fa fa-search"></i>
+                            <input type="text" id="profile-sales-search" placeholder="بحث في الموزعين...">
+                            <button class="clear-search" id="clear-profile-sales-search">&times;</button>
+                        </div>
+                    </div>
+
+                    <div class="data-card">
+                        <div class="card-header with-count">
+                            <h4>المبيعات حسب الموزع</h4>
+                            <span class="record-count" id="profile-sales-count">0 موزع</span>
+                        </div>
+                        <div class="table-container">
+                            <table id="tbl-profile-sales">
+                                <thead>
+                                    <tr>
+                                        <th>الموزع</th>
+                                        <th>المبيعات</th>
+                                        <th>النسبة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="3" class="empty-row"><span class="skeleton" style="width:150px;height:20px;display:inline-block"></span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Expenses Section -->
-            <div class="dashboard-section" data-animate="18">
+            <div class="dashboard-section" data-animate="10">
                 <div class="section-header">
                     <h3 class="section-title">
                         <i class="fa fa-money"></i>
@@ -717,7 +582,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
             <!-- Row 1: Top Customers, Top Suppliers, Profit Analysis -->
             <div class="section-grid three-cols">
                 <!-- Top Customers Section -->
-                <div class="dashboard-section" data-animate="19">
+                <div class="dashboard-section" data-animate="11">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-trophy"></i>
@@ -749,7 +614,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
 
                 <!-- Top Suppliers Section -->
-                <div class="dashboard-section" data-animate="20">
+                <div class="dashboard-section" data-animate="12">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-industry"></i>
@@ -781,7 +646,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
 
                 <!-- Profit Analysis Section -->
-                <div class="dashboard-section" data-animate="21">
+                <div class="dashboard-section" data-animate="13">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-line-chart"></i>
@@ -847,7 +712,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
             <!-- Row 2: Monthly Comparison, Inventory Turnover -->
             <div class="section-grid three-cols">
                 <!-- Monthly Comparison Section -->
-                <div class="dashboard-section" data-animate="22">
+                <div class="dashboard-section" data-animate="14">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-calendar"></i>
@@ -865,7 +730,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
 
 
                 <!-- Inventory Turnover Section -->
-                <div class="dashboard-section" data-animate="24">
+                <div class="dashboard-section" data-animate="15">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-refresh"></i>
@@ -909,7 +774,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
             <!-- Row 4: Expected Collections, Due Payables -->
             <div class="section-grid three-cols">
                 <!-- Expected Collections Section -->
-                <div class="dashboard-section" data-animate="26">
+                <div class="dashboard-section" data-animate="16">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-hand-holding-usd"></i>
@@ -943,7 +808,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                 </div>
 
                 <!-- Due Payables Section -->
-                <div class="dashboard-section" data-animate="27">
+                <div class="dashboard-section" data-animate="17">
                     <div class="section-header">
                         <h3 class="section-title">
                             <i class="fa fa-credit-card"></i>
@@ -979,7 +844,7 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
             </div>
 
             <!-- Aging Report Section -->
-            <div class="dashboard-section" data-animate="28">
+            <div class="dashboard-section" data-animate="18">
                 <div class="section-header">
                     <h3 class="section-title">
                         <i class="fa fa-clock-o"></i>
@@ -1039,6 +904,132 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                                 <thead><tr><th>العميل</th><th>الرصيد</th></tr></thead>
                                 <tbody><tr><td colspan="2" class="empty-row">-</td></tr></tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards Row 1 - Mode of Payments & Stock -->
+            <div class="summary-row">
+                <div class="summary-card payment-card" data-animate="19">
+                    <div class="summary-icon">
+                        <i class="fa fa-credit-card"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">رصيد الخزن</div>
+                        <div class="summary-value" id="summary-payment">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span id="chip-mop">- خزن</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-card stock-card" data-animate="20">
+                    <div class="summary-icon">
+                        <i class="fa fa-cubes"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">إجمالي المخزون (تكلفة)</div>
+                        <div class="summary-value" id="summary-stock">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-label" style="margin-top:4px;">إجمالي المخزون (بيع)</div>
+                        <div class="summary-value" id="summary-stock-selling">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span id="chip-items">- أصناف</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-card customer-card" data-animate="21">
+                    <div class="summary-icon">
+                        <i class="fa fa-users"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">أرصدة العملاء</div>
+                        <div class="summary-value" id="summary-customer">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span id="chip-customers">- عملاء</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-card supplier-card" data-animate="22">
+                    <div class="summary-icon">
+                        <i class="fa fa-truck"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">أرصدة الموردين</div>
+                        <div class="summary-value" id="summary-supplier">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span id="chip-suppliers">- موردين</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards Row 2 - Sales & Purchase -->
+            <div class="summary-row">
+                <div class="summary-card sales-card" data-animate="23">
+                    <div class="summary-icon">
+                        <i class="fa fa-shopping-cart"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">إجمالي المبيعات</div>
+                        <div class="summary-value" id="summary-sales">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span id="chip-sales-count">- فاتورة</span>
+                            <span id="chip-sales-outstanding" class="chip-warning">متبقي: -</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-card purchase-card" data-animate="24">
+                    <div class="summary-icon">
+                        <i class="fa fa-shopping-bag"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">إجمالي المشتريات</div>
+                        <div class="summary-value" id="summary-purchase">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span id="chip-purchase-count">- فاتورة</span>
+                            <span id="chip-purchase-outstanding" class="chip-danger">متبقي: -</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-card outstanding-sales-card" data-animate="25">
+                    <div class="summary-icon">
+                        <i class="fa fa-file-text-o"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">متبقي المبيعات</div>
+                        <div class="summary-value" id="summary-outstanding-sales">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span class="chip-info">مستحق التحصيل</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-card outstanding-purchase-card" data-animate="26">
+                    <div class="summary-icon">
+                        <i class="fa fa-file-o"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-label">متبقي المشتريات</div>
+                        <div class="summary-value" id="summary-outstanding-purchase">
+                            <span class="skeleton" style="width:80px;height:32px;display:inline-block"></span>
+                        </div>
+                        <div class="summary-meta">
+                            <span class="chip-danger">مستحق الدفع</span>
                         </div>
                     </div>
                 </div>
@@ -1211,9 +1202,9 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
     let expensesData = null;
     let expRangeKey = 'this_month';
     let expCustom = null;
-    let selectedCompany = null; // Company filter state
+    let selectedCompany = null;
 
-    // Load companies for the filter dropdown using ORM with user permissions
+    // Load default company from user defaults
     async function loadCompanies() {
         return new Promise((resolve) => {
             frappe.call({
@@ -1222,26 +1213,10 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
                     const data = r.message || {};
                     const companies = data.companies || [];
                     const defaultCompany = data.default_company;
-                    const $select = $('#company-select');
-                    $select.empty();
 
-                    // Only add "All Companies" option if user has access to multiple companies
-                    if (companies.length > 1) {
-                        $select.append('<option value="">جميع الشركات</option>');
-                    }
-
-                    // Add individual companies user has access to
-                    companies.forEach(c => {
-                        $select.append(`<option value="${c.name}">${c.company_name || c.name}</option>`);
-                    });
-
-                    // Set default to user's default company if they have access to it
-                    if (defaultCompany && companies.some(c => c.name === defaultCompany)) {
-                        $select.val(defaultCompany);
+                    if (defaultCompany) {
                         selectedCompany = defaultCompany;
-                    } else if (companies.length === 1) {
-                        // If user only has access to one company, select it
-                        $select.val(companies[0].name);
+                    } else if (companies.length > 0) {
                         selectedCompany = companies[0].name;
                     }
 
@@ -1252,7 +1227,6 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
         });
     }
 
-    // Get the currently selected company (or null for all)
     function getSelectedCompany() {
         return selectedCompany || null;
     }
@@ -2509,12 +2483,6 @@ frappe.pages['admin'].on_page_load = function(wrapper) {
 
     $(wrapper).on('click', '#btn-print', function() {
         window.print();
-    });
-
-    // Company filter change handler
-    $(wrapper).on('change', '#company-select', function() {
-        selectedCompany = $(this).val() || null;
-        refreshAll();
     });
 
     // ==================== Initialize ====================
