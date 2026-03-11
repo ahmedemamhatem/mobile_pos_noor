@@ -17,8 +17,6 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
         STOCK_DESC: "تحويلات وحركات المخزون",
         PAYMENT_SYSTEM: "قبض / صرف / تحويل",
         PAYMENT_DESC: "سندات القبض والصرف والتحويل بين طرق الدفع",
-        ITEMS_MANAGEMENT: "إدارة الأصناف",
-        ITEMS_DESC: "عرض وإضافة وتعديل الأصناف والأسعار",
         TODAY_SALES: "مبيعات اليوم",
         TODAY_INVOICES: "فواتير اليوم",
         TOTAL_AMOUNT: "إجمالي المبلغ",
@@ -359,11 +357,6 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
             color: white;
         }
 
-        .items-icon {
-            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-            color: white;
-        }
-
         .quick-card h3 {
             font-size: 1.75em;
             font-weight: 800;
@@ -437,15 +430,6 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
 
         .payment-btn:hover {
             box-shadow: 0 10px 28px rgba(245, 158, 11, 0.45);
-        }
-
-        .items-btn {
-            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-            box-shadow: 0 6px 16px rgba(249, 115, 22, 0.35);
-        }
-
-        .items-btn:hover {
-            box-shadow: 0 10px 28px rgba(249, 115, 22, 0.45);
         }
 
         /* Statistics Grid */
@@ -737,16 +721,6 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
                     </button>
                 </div>
 
-                <div class="quick-card" data-page="items">
-                    <div class="quick-card-icon items-icon">
-                        <i class="fa fa-tags"></i>
-                    </div>
-                    <h3>${TEXT.ITEMS_MANAGEMENT}</h3>
-                    <p>${TEXT.ITEMS_DESC}</p>
-                    <button class="quick-card-btn items-btn" onclick="frappe.set_route('items')">
-                        <i class="fa fa-tags"></i> ${TEXT.OPEN}
-                    </button>
-                </div>
             </div>
 
             <!-- Statistics Grid -->
@@ -844,7 +818,7 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
                         <i class="fa fa-money"></i>
                     </div>
                     <p class="stat-label">${TEXT.TOTAL_AMOUNT}</p>
-                    <h3 class="stat-value">${totalAmount.toLocaleString('ar-SA', {maximumFractionDigits: 0})}</h3>
+                    <h3 class="stat-value">${totalAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}</h3>
                     <div class="stat-change stat-up">
                         <i class="fa fa-arrow-up"></i> +8% من الأمس
                     </div>
@@ -889,7 +863,7 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
                                 <p class="activity-time">${inv.customer} • ${inv.posting_time || ''}</p>
                             </div>
                             <div class="activity-amount">
-                                ${(inv.grand_total || 0).toLocaleString('ar-SA', {maximumFractionDigits: 0})} ${TEXT.CURRENCY}
+                                ${(inv.grand_total || 0).toLocaleString('en-US', {maximumFractionDigits: 0})} ${TEXT.CURRENCY}
                             </div>
                         </div>
                     `;
@@ -946,7 +920,7 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
             month: 'long',
             day: 'numeric'
         };
-        return date.toLocaleDateString('ar-SA', options);
+        return date.toLocaleDateString('en-US', options);
     }
 
     function formatArabicTime() {
@@ -956,7 +930,7 @@ frappe.pages['main'].on_page_load = async function(wrapper) {
             minute: '2-digit',
             hour12: true
         };
-        return date.toLocaleTimeString('ar-SA', options);
+        return date.toLocaleTimeString('en-US', options);
     }
 
     function getRandomQuote() {
